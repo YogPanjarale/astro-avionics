@@ -12,6 +12,7 @@ struct IMUReading {
     double yaw;
     double pitch;
     double acceleration;
+    double upwardaccel;
 };
 
 // Function prototypes
