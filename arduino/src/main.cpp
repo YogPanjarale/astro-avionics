@@ -164,7 +164,24 @@ void loop() {
     SerialRaspi.println(packDATA(data));
     // send 
     // check for commands from the raspberry pi
+    if(bmpSensor.getAltitude() > 200)
+    {
+      state = FLIGHT;
+    }
+
+  while(state == FLIGHT)
+  {
+    SerialE32.println("Flight mode activated!");
+    SerialRaspi.println("Flight mode activated!");
+
+    Data data;
+    data.bmpAltitude = bmpSensor.getAltitude();
+
+    //get height from imu
     
   }
+  }
+
+
 
 }

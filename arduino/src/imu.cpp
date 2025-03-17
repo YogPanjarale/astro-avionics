@@ -46,6 +46,7 @@ IMUReading readIMU()
     icm.getEvent(&accel, &gyro, &temp);
 
     IMUReading reading;
+    reading.upwardaccel = accel.acceleration.y - accelBiasY;
     reading.acceleration = sqrt(pow(accel.acceleration.x - accelBiasX, 2) +
                                 pow(accel.acceleration.y - accelBiasY, 2) +
                                 pow(accel.acceleration.z - accelBiasZ, 2));
