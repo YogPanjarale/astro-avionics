@@ -7,5 +7,8 @@
 
 void setupRelays();
 void triggerRelay(int relayPin);
+void triggerMainEjectionCharges();
+void triggerDrogueEjectionCharges();
+void triggerBackupEjectionCharges();
 
 #endif

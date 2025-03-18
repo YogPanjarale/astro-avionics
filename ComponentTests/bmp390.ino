@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <Adafruit_BMP3XX.h>
+#include <bmp3.h>
 
 #define bmpSDA A4 
 #define bmpSCL A5
@@ -19,7 +20,6 @@ float getAltitude()
 
     float pressure = bmp.pressure; // Pressure in Pascals
     float temperature = bmp.temperature; // Temperature in Celsius
-
     // Convert pressure to altitude using the barometric formula
     float seaLevelPressure = 101325; // Standard sea-level pressure in Pascals
 
@@ -34,27 +34,22 @@ float getAltitude()
 void setup()
 {
     // start serial port at 115200 bps:
-    Serial.begin(115200);
-    Wire.begin(bmpSDA, bmpSCL); // Start I2C with defined pins
-
+    Serial.begin(9600);
+    pinMode(10,OUTPUT);
+    digitalWrite(10,HIGH);
+    Wire.begin(); // Start I2C with defined pins
     // setup bmp sensor
-    if (!bmp.begin_I2C()) { // Initialize BMP390 over I2C
+    if (!bmp.begin_I2C(119)) { // Initialize BMP390 over I2C
         Serial.println("Could not find a valid BMP390 sensor, check wiring!");
         //makes the prog enter an infinite loop, stops execution if sensor is faulty
         while (1);
     }
-    
-    //oversampling to reduce noise and improve accuracy
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-
-    //filtering to reduce noise
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
 }
 
 void loop()
 {
     // Print altitude
+    
     float altitude = getAltitude();
     Serial.print("Altitude: ");
     Serial.print(altitude);

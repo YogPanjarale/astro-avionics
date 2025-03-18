@@ -1,4 +1,4 @@
-#include "testEjectionCharges.h"
+#include "triggerEjectionCharges.h"
 #include <Arduino.h>
 
 void setupRelays()
@@ -19,4 +19,20 @@ void triggerRelay(int relayPin)
     digitalWrite(relayPin, HIGH); // Turn on relay
     delay(1000);                  // Wait 1 second
     digitalWrite(relayPin, LOW);  // Turn off relay
+}
+
+void triggerMainEjectionCharges()
+{
+    // Trigger main ejection charges
+    triggerRelay(relayMain);
+}
+void triggerDrogueEjectionCharges()
+{
+    // Trigger drogue ejection charges
+    triggerRelay(relayDrogue);
+}
+void triggerBackupEjectionCharges()
+{
+    // Trigger backup ejection charges
+    triggerRelay(relayBackup);
 }

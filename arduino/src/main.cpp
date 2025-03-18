@@ -1,7 +1,10 @@
 #include <Arduino.h>
 #include "E32.h"
-#include "testEjectionCharges.h"
-#include "./bmp.h"
+#include "triggerEjectionCharges.h"
+#include "checkEjectionCharges.h"
+#include "bmp.h"
+#include "imu.h"
+#include "buzzer.h"
 
 #define BMP_SDA A4
 #define BMP_SCL A5
@@ -23,7 +26,7 @@ BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
 // Define serial ports
 HardwareSerial SerialE32(1);   // Use UART1 (A3 RX, A2 TX)
 HardwareSerial SerialRaspi(2); // Use UART2 (A6 RX, A7 TX)
-HardwareSerial SerialGPS(3); // Use UART 3 (D1 RX, D0 TX)
+HardwareSerial SerialGPS(3); //Use UART3 (D0 TX, D1 RX)
 E32Module e32(SerialE32);
 
 
@@ -50,13 +53,30 @@ enum State {
   DROUGE,
   PARACHUTE,
   RECOVERY,
-  EMERGENCY
 };
 
 State state = BOOT;
 
 // state variables
 float groundAltitude = 0;
+
+// full data struct
+struct Data {
+  float bmpAltitude;
+  float imuAltitude;
+  float pressure;
+  float latitude;
+  float longitude;
+  float accel_x;
+  float accel_y;
+  float accel_z;
+  float vel_bmp;
+  float vel_imu;
+};
+
+String packDATA(Data data){
+  return "DATA:" + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + "," + String(data.latitude) + "," + String(data.longitude) + "," + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -85,12 +105,13 @@ void loop() {
     SerialE32.begin(115200, SERIAL_8N1, E32RX, E32TX);
 
     // begin communication with GPS
-    SerialGPS.begin(115200, SERIAL_8N1, GPSRX, GPSTX)
+    SerialGPS.begin(115200, SERIAL_8N1, GPSRX, GPSTX);
 
 
     // connect to raspberry pi
     unsigned long start = millis();
-    while (millis() - start < CONNECT_TIME ||  (!(status & RPI_h) && !(status & LORA_h))){
+    // this loop runs while the time is less than connect time , or  the raspberry pi and lora module are not connected
+    while (millis() - start < CONNECT_TIME ||  (!(status & RPI_h) || !(status & LORA_h))){
       // send ping , and wait for pong
       SerialRaspi.println("PING");
       if(SerialRaspi.available()){
@@ -112,9 +133,17 @@ void loop() {
   }
   while (state == CALIB){
     // initialize the sensors and calibrate them
+    // setup the bmp sensor
     if(bmpSensor.begin()){
       status |= BMP_h;
     }
+    // setup the imu
+    if (setupIMU()){
+      status |= IMU_h;
+    }
+    
+    // play calibration start tone
+    playCalibrationStartTone(); // takes 1 second
     for (int i = 0; i < 10; i++){
       groundAltitude += bmpSensor.getAltitude();
       delay(10);
@@ -123,10 +152,39 @@ void loop() {
 
     SerialRaspi.println("GROUND_ALTITUDE:" + String(groundAltitude));
     
-    // TODO : calibrate the IMU
+    
+    // IMU will take 500 samples to calibrate , each 5ms , total 2.5 seconds
+    calibrateIMU(500); 
+    // play a tone to indicate that the calibration is done
+    playCalibrationStartTone(); // takes 1 second
 
-    
-    
+    state = IDLE;
+  }
+  while (state == IDLE) {
+    // read the data from the sensors
+    Data data;
+    data.bmpAltitude = bmpSensor.getAltitude();
+    data.pressure = bmpSensor.getPressure();
+    data.imuAltitude = getHeightIMU();
+    data.accel_x = readIMU().accel_x;
+    data.accel_y = readIMU().accel_y;
+    data.accel_z = readIMU().accel_z;
+    data.vel_imu = getVelocityIMU();
+    data.vel_bmp = bmpSensor.getVelocity();
+
+    // TODO : read the data from the GPS
+
+    // send the data to the raspberry pi
+    SerialRaspi.println(packDATA(data));
+    // send 
+    // check for commands from the raspberry pi
+    if((BMP_h & status) && (bmpSensor.getAltitude()-groundAltitude>200) || (IMU_h & status) && (getHeightIMU()>200)){
+      state = FLIGHT;
+    }
+  }
+
+  while(state == FLIGHT){
+    //TODO
   }
 
 }
