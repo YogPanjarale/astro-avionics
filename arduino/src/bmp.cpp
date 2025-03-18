@@ -12,8 +12,8 @@ bool BMPSensor::begin()
 {
     // start serial port at 115200 bps:
     Serial.begin(9600);
-    pinMode(10,OUTPUT);
-    digitalWrite(10,HIGH);
+    pinMode(10, OUTPUT);
+    digitalWrite(10, HIGH);
     Wire.begin(sdaPin, sclPin); // Start I2C with defined pins
 
     // setup bmp sensor
@@ -24,11 +24,11 @@ bool BMPSensor::begin()
     }
 
     // oversampling to reduce noise and improve accuracy
-    // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    // bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
 
     // // filtering to reduce noise
-    // bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
     return true;
 }
 
@@ -54,10 +54,10 @@ float BMPSensor::getAltitude()
 
 float BMPSensor::getVelocity()
 {
-    unsigned long currentTime = millis(); // Get current time
-    float currentAltitude = getAltitude(); // Get current altitude
+    unsigned long currentTime = millis();                // Get current time
+    float currentAltitude = getAltitude();               // Get current altitude
     float deltaTime = (currentTime - prevTime) / 1000.0; // Convert to seconds
-    float velocity = 0; // Default velocity
+    float velocity = 0;                                  // Default velocity
 
     if (deltaTime > 0) // Avoid division by zero
     {
@@ -79,6 +79,6 @@ float BMPSensor::getPressure()
         return -1; // Return -1 in case of failure
     }
 
-    float pressure = bmp.pressure;       // Pressure in Pascals
+    float pressure = bmp.pressure; // Pressure in Pascals
     return pressure;
 }

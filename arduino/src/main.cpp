@@ -36,12 +36,31 @@ E32Module e32(SerialE32);
 #define LORA_h   (1 << 2) // is the lora alive
 #define BMP_h    (1 << 3) // is the bmp alive
 #define IMU_h    (1 << 4) //is the imu alive
-#define ECd_h    (1 << 5) //ejecion charge drogue
-#define ECm_h    (1 << 6) //ejecion charge main
-#define ECb_h    (1 << 7) //ejecion charge backup
+// ejection charge continuity , 0 means no continuity , 1 means continuity
+#define ECd_h    (1 << 5) //ejecion charge continuity drogue 
+#define ECm_h    (1 << 6) //ejecion charge continuity main
+#define ECb_h    (1 << 7) //ejecion charge continuity backup
+// ejection charge status , 0 means not fired , 1 means fired
+#define ECrd_h    (1 << 8) //ejecion charge status drogue
+#define ECrm_h    (1 << 9) //ejecion charge status main
+#define ECrb_h    (1 << 10) //ejecion charge status backup
+// next 3 (11,12,13) bits show the state of the rocket, 000 means boot, 001 means connection, 010 means calibration, 011 means idle, 100 means flight, 101 means drogue, 110 means parachute, 111 means recovery
+#define S10_h    (1 << 11) // state bit 0
+#define S11h    (1 << 12) // state bit 1
+#define S12_h    (1 << 13) // state bit 2
+
 // binary status register
-// 0b00000000
-int status = 0b00000000;
+// 0b0000000000000000 
+// bit 0: raspberry pi status
+// bit 1: gps status
+// bit 2: lora status
+// bit 3: bmp status
+// bit 4: imu status
+// bit 5 ,6 ,7: ejection charge continuity (drogue, main, backup) 
+// bit 8,9,10: ejection charge status (drogue, main, backup)
+// bit 11,12,13: state of the rocket
+uint16_t status = 0b0000000000000000;
+// define ejection charge status register
 
 
 enum State {
@@ -54,6 +73,49 @@ enum State {
   PARACHUTE,
   RECOVERY,
 };
+
+void setState(State s){
+  state = s;
+  // update the status register , set the state bits
+// next 3 (11,12,13) bits show the state of the rocket, 000 means boot, 001 means connection, 010 means calibration, 011 means idle, 100 means flight, 101 means drogue, 110 means parachute, 111 means recovery
+  switch (s)
+  {
+  case BOOT:
+    status &= ~(S10_h | S11h | S12_h); //000
+    break;
+  case CONN:
+    status &= ~(S10_h | S11h); //001
+    status |= S12_h;
+    break;
+  case CALIB:
+    status &= ~(S10_h | S12_h); //010
+    status |= S11h;
+    break;
+  case IDLE:
+    status &= ~(S10_h); // 011
+    status |= S11h | S12_h;
+    break;
+  case FLIGHT:
+    status &= ~(S11h | S12_h); // 100
+    status |= S10_h;
+    break;
+  case DROUGE:
+    status &= ~(S10_h | S11h); // 101
+    status |= S12_h;
+    break;
+  case PARACHUTE:
+    status &= ~(S10_h); // 110
+    status |= S11h | S12_h;
+    break;
+  case RECOVERY:
+    status |= S10_h | S11h | S12_h; // 111
+    break;
+  default:
+    break;
+  }
+
+
+}
 
 State state = BOOT;
 
@@ -72,10 +134,15 @@ struct Data {
   float accel_z;
   float vel_bmp;
   float vel_imu;
+  uint16_t statusReg;
 };
 
 String packDATA(Data data){
-  return "DATA:" + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + "," + String(data.latitude) + "," + String(data.longitude) + "," + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu);
+  String binaryStatus = "";
+  for (int i = 15; i >= 0; i--) {
+    binaryStatus += String((data.statusReg >> i) & 1);
+  }
+  return "DATA:" + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + "," + String(data.latitude) + "," + String(data.longitude) + "," + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
 }
 
 void setup() {
@@ -95,7 +162,7 @@ void loop() {
       digitalWrite(BuzzerPin, LOW);
       delay(800);
     }
-    state = CONN;
+    setState (CONN);
   }
   while (state == CONN){
     // begin communication with the raspberry pi
@@ -129,7 +196,7 @@ void loop() {
     digitalWrite(BuzzerPin, HIGH);
     delay(2000);
     digitalWrite(BuzzerPin, LOW);
-    state  = CALIB;
+    setState(CALIB);
   }
   while (state == CALIB){
     // initialize the sensors and calibrate them
@@ -158,7 +225,7 @@ void loop() {
     // play a tone to indicate that the calibration is done
     playCalibrationStartTone(); // takes 1 second
 
-    state = IDLE;
+    setState(IDLE);
   }
   while (state == IDLE) {
     // read the data from the sensors
@@ -171,7 +238,7 @@ void loop() {
     data.accel_z = readIMU().accel_z;
     data.vel_imu = getVelocityIMU();
     data.vel_bmp = bmpSensor.getVelocity();
-
+    data.statusReg = status;
     // TODO : read the data from the GPS
 
     // send the data to the raspberry pi
@@ -179,7 +246,7 @@ void loop() {
     // send 
     // check for commands from the raspberry pi
     if((BMP_h & status) && (bmpSensor.getAltitude()-groundAltitude>200) || (IMU_h & status) && (getHeightIMU()>200)){
-      state = FLIGHT;
+        setState(FLIGHT);
     }
   }
 

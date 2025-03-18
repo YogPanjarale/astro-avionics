@@ -8,7 +8,8 @@
 /*
 This function reads the BMP390 sensor and returns the altitude in meters.
 */
-
+float prevAltitude = 0; // Store the last altitude
+unsigned long prevTime = 0; // Store the last time in milliseconds
 Adafruit_BMP3XX bmp;
 
 float getAltitude()
@@ -31,6 +32,37 @@ float getAltitude()
     return altitude;
 }
 
+float getVelocity()
+{
+    unsigned long currentTime = millis();                // Get current time
+    float currentAltitude = getAltitude();               // Get current altitude
+    float deltaTime = (currentTime - prevTime) / 1000.0; // Convert to seconds
+    float velocity = 0;                                  // Default velocity
+
+    if (deltaTime > 0) // Avoid division by zero
+    {
+        velocity = (currentAltitude - prevAltitude) / deltaTime;
+    }
+
+    // Update previous values
+    prevAltitude = currentAltitude;
+    prevTime = currentTime;
+
+    return velocity;
+}
+
+float getPressure()
+{
+    if (!bmp.performReading())
+    {
+        Serial.println("Faild to read from BMP390 sensor!");
+        return -1; // Return -1 in case of failure
+    }
+
+    float pressure = bmp.pressure; // Pressure in Pascals
+    return pressure;
+}
+
 void setup()
 {
     // start serial port at 115200 bps:
@@ -51,9 +83,17 @@ void loop()
     // Print altitude
     
     float altitude = getAltitude();
+    float velocity = getVelocity();
+    float pressure = getPressure();
     Serial.print("Altitude: ");
     Serial.print(altitude);
     Serial.println(" meters");
+    Serial.print("Velocity: ");
+    Serial.print(velocity);
+    Serial.println(" m/s");
+    Serial.print("Pressure: ");
+    Serial.print(pressure);
+    Serial.println(" Pa");
     // wait for a second
     delay(1000);
 }
