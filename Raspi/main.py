@@ -19,8 +19,8 @@ os.makedirs(log_dir, exist_ok=True)  # Ensure the directory exists
 # bmp init
 i2c = busio.I2C(board.SCL, board.SDA)
 bmp = adafruit_bmp3xx.BMP3XX_I2C(i2c, address=0x77) # install i2c tools and verify address with $ i2cdetect -y 1
-#bmp.pressure_oversampling = 8
-#bmp.temperature_oversampling = 4
+bmp.pressure_oversampling = 8
+bmp.temperature_oversampling = 4
 bmp.sea_level_pressure = 1012 # Set this before flight!
 
 # constants
@@ -125,12 +125,12 @@ async def high_res_video():
     while height < 200:
         await asyncio.sleep(1)
     while velocity > HIGH_RES_VEL:
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.04)
     if arduino_status:
         await stop_recording()
     await high_res_start()
     while velocity > -HIGH_RES_VEL:
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.04)
     await high_res_stop()
     if arduino_status:
         await start_recording()
@@ -190,7 +190,7 @@ async def update_vel():
     while vel_logging:
         await asyncio.to_thread(velocity_calc)
         await vel_log(f"Altitude= {current_alt:.2f}  Height= {height:.2f}  Velocity= {velocity:.2f}")
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.04)
     await flight_log("Stopping velocity logging.")
 
 def velocity_calc():
@@ -218,7 +218,7 @@ async def flight_mode():
             counter = 0
         if counter > 6:
             break
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.04)
     await asyncio.sleep(0.5)
     await flight_log("Apogee detected! Deploying drogue.")
     await deploy_drogue()
