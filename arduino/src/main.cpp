@@ -73,7 +73,7 @@ enum State {
   CALIB,
   IDLE,
   FLIGHT,
-  DROUGE,
+  DROGUE,
   PARACHUTE,
   RECOVERY,
 };
@@ -102,7 +102,7 @@ void setState(State s){
     status &= ~(S11h | S12_h); // 100
     status |= S10_h;
     break;
-  case DROUGE:
+  case DROGUE:
     status &= ~(S10_h | S11h); // 101
     status |= S12_h;
     break;
@@ -166,20 +166,20 @@ void checkAllEjectionChargeContinuity(bool force = false){
   if (checkMainEjectionCharges()){
     status |= ECm_h;
   }else {
-    status &= !ECm_h;
+    status &= ~ECm_h;
   }
   if (checkBackupEjectionCharges()){
     status |= ECb_h;
   }
   else {
-    status &= !ECb_h;
+    status &= ~ECb_h;
 
   }
   if (checkDrogueEjectionCharges()){
     status |= ECd_h;
   }
   else {
-    status &= !ECd_h;
+    status &= ~ECd_h;
 
   }
 }
@@ -339,7 +339,7 @@ void loop() {
     SerialRaspi.println(packed_data);
     // send the data to Telemetry 
     e32.sendMessage(packed_data);
-    // TODO : if imu not working , do other thing to enter drouge mode
+    // TODO : if imu not working , do other thing to enter drogue mode
     // TODO : do other checks
     if(data.vel_bmp <1 || isRocketTippingOver() || data.vel_imu <1){
       status |= TIP_OVER;
@@ -348,34 +348,34 @@ void loop() {
       SerialRaspi.println("TIP OVER");
       e32.sendMessage("TIP OVER");
       SerialRaspi.println(timeof_tip_over);
-      // update continutity status to make things ready for drouge 
+      // update continutity status to make things ready for drogue 
       checkAllEjectionChargeContinuity(true);
-      setState(DROUGE);
+      setState(DROGUE);
     }
   }
-  while (state == DROUGE)
+  while (state == DROGUE)
   {
-    // wait for half second after tip over , and deploy drouge.
+    // wait for half second after tip over , and deploy drogue.
     if (millis()-timeof_tip_over > 500){
       triggerDrogueEjectionCharges();
       delay(100); // wait for 100ms and check if deployment was success
       int status_d = checkDrogueEjectionCharges();
       if (!status_d){
-        // drouge deoplyment is confirmed
-        status |= ECrd_h; // update ejection charge drouge deployment to 1
-        status &= ~ECd_h; // update ejection charge drouge continuity to 0
-        SerialRaspi.println("DROUGE Deployed");
-        e32.sendMessage("DROUGE Deployed");
+        // drogue deoplyment is confirmed
+        status |= ECrd_h; // update ejection charge drogue deployment to 1
+        status &= ~ECd_h; // update ejection charge drogue continuity to 0
+        SerialRaspi.println("DROGUE Deployed");
+        e32.sendMessage("DROGUE Deployed");
         setState(PARACHUTE);
       }
       else {
         // pray
       }
     }
-    // return out of drouge state to parachute if drouge is not deployed in few seconds 
+    // return out of drogue state to parachute if drogue is not deployed in few seconds 
     if (millis()-timeof_tip_over > 5000){
-      SerialRaspi.println("TIMEOUT of DROUGE , Entering parachute mode");
-      e32.sendMessage("TIMEOUT of DROUGE , Entering parachute mode");
+      SerialRaspi.println("TIMEOUT of DROGUE , Entering parachute mode");
+      e32.sendMessage("TIMEOUT of DROGUE , Entering parachute mode");
     }
    
   }
