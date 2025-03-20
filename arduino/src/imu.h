@@ -22,4 +22,6 @@ void calibrateIMU(int samples = 500);
 IMUReading readIMU();
 float getVelocityIMU();
 float getHeightIMU();
+bool isRocketTippingOver();
+
 #endif

@@ -104,6 +104,30 @@ float getHeightIMU(){
     return height;
 }
 
+bool isRocketTippingOver()
+{
+    sensors_event_t accel, gyro, temp;
+    icm.getEvent(&accel, &gyro, &temp);
+
+    float pitch = atan2(-(accel.acceleration.x - accelBiasX),
+                        sqrt(pow(accel.acceleration.y - accelBiasY, 2) + pow(accel.acceleration.z - accelBiasZ, 2))) * 180 / PI;
+
+    float gyroX = gyro.gyro.x - gyroBiasX;
+    float accelY = accel.acceleration.y - accelBiasY;
+
+    // Define thresholds
+    const float PITCH_THRESHOLD = 45.0;  // Degrees
+    const float GYRO_X_THRESHOLD = 1.0;  // Rad/s (adjust based on testing)
+    const float ACCEL_Y_DROP_THRESHOLD = 3.0;  // m/s² (low acceleration means freefall)
+
+    // Check if pitch is too large or tipping too fast
+    if (abs(pitch) > PITCH_THRESHOLD && abs(gyroX) > GYRO_X_THRESHOLD && accelY < ACCEL_Y_DROP_THRESHOLD)
+    {
+        return true;  // Rocket is tipping over
+    }
+    return false;
+}
+
 void setup() {
     Serial.begin(115200);
     Wire.begin();
@@ -122,7 +146,9 @@ void setup() {
 }
 
 void loop() {
+    calibrateIMU();
     IMUReading reading = readIMU();
+    Serial.print("Tipping over: "); Serial.println(isRocketTippingOver());
 
     Serial.print("Acceleration x: "); Serial.println(reading.accel_x);
     Serial.print("Acceleration y: "); Serial.println(reading.accel_y);

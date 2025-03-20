@@ -79,7 +79,6 @@ enum State {
 };
 
 void setState(State s){
-  state = s;
   // update the status register , set the state bits
 // next 3 (11,12,13) bits show the state of the rocket, 000 means boot, 001 means connection, 010 means calibration, 011 means idle, 100 means flight, 101 means drogue, 110 means parachute, 111 means recovery
   switch (s)
@@ -189,24 +188,28 @@ void checkAllEjectionChargeContinuity(bool force = false){
 we keep the averaging the ax , ay , az with the readings we recive, and if there is more than 40% change, we return 1;
 we ignore change in first 10 readings
 */
-int checkTipOver(float ax,float ay , float az){
-  static float aax = 0, aay=0, aaz =0;
-  static unsigned long count = 0;
-  if (count>10){
-    // check if anything has changed more then 30% from average
-    float dx = abs((aax-ax)/aax) , dy  = abs((aay - ay)/aay) , dz = abs((aaz-az)/aaz);
-    if (dx > 0.3 || dy >0.3||dx >0.3)
-    {
-      return 1;
-    }
-  }
-  // updating averages
-   aax = (count == 0) ? ax : (aax * count + ax) / (count + 1);
-   aay = (count == 0) ? ay : (aay * count + ay) / (count + 1);
-   aaz = (count == 0) ? az : (aaz * count + az) / (count + 1);
+// int checkTipOver(float ax,float ay , float az){
+//   // static float aax = 0, aay=0, aaz =0;
+//   // static unsigned long count = 0;
+//   // if (count>10){
+//   //   // check if anything has changed more then 30% from average
+//   //   float dx = abs((aax-ax)/aax) , dy  = abs((aay - ay)/aay) , dz = abs((aaz-az)/aaz);
+//   //   if (dx > 0.3 || dy >0.3||dx >0.3)
+//   //   {
+//   //     return 1;
+//   //   }
+//   // }
+//   // // updating averages
+//   //  aax = (count == 0) ? ax : (aax * count + ax) / (count + 1);
+//   //  aay = (count == 0) ? ay : (aay * count + ay) / (count + 1);
+//   //  aaz = (count == 0) ? az : (aaz * count + az) / (count + 1);
 
-   count++; // increment count
-}
+//   //  count++; // increment count
+
+
+// }
+
+
 
 Data updateDataWithoutGPS(){
   Data data;
@@ -338,7 +341,7 @@ void loop() {
     e32.sendMessage(packed_data);
     // TODO : if imu not working , do other thing to enter drogue mode
     // TODO : do other checks
-    if(data.vel_bmp <1 ||checkTipOver(data.accel_x,data.accel_y,data.accel_z) || data.vel_imu <1){
+    if(data.vel_bmp <1 || isRocketTippingOver() || data.vel_imu <1){
       status |= TIP_OVER;
       timeof_tip_over = millis();
       // send tip over message to raspi
