@@ -2,9 +2,8 @@
 #include <Arduino.h>
 E32Module::E32Module(HardwareSerial &serial) : e32Serial(serial) {}
 
-void E32Module::begin(long baudRate) {
-    Serial.begin(115200);
-    e32Serial.begin(baudRate);
+void E32Module::setup() {
+    
 
     // Setup M0 and M1 for Normal Transmission Mode
     pinMode(e32M0, OUTPUT);

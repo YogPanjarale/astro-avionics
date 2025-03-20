@@ -36,7 +36,7 @@ void calibrateIMU(int samples)
 
         axSum += accel.acceleration.x;
         aySum += accel.acceleration.y;
-        azSum += accel.acceleration.z - 9.81; // Remove gravity
+        azSum += accel.acceleration.z; // we don't do minus for gravity
 
         gxSum += gyro.gyro.x;
         gySum += gyro.gyro.y;

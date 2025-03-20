@@ -12,7 +12,7 @@ class E32Module
 {
 public:
     E32Module(HardwareSerial &serial); // Constructor
-    void begin(long baudRate);         // Initialize serial communication
+    void setup();         // setup the module
     void sendMessage(String message);  // Send a string message
 
 private:

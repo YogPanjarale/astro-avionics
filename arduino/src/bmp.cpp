@@ -24,8 +24,8 @@ bool BMPSensor::begin()
     }
 
     // oversampling to reduce noise and improve accuracy
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_4X); // new value should be updated every 40ms (25Hz)
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_8X);  // new value should be updated every 40ms (25Hz)
 
     // // filtering to reduce noise
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
@@ -53,7 +53,14 @@ float BMPSensor::getAltitude()
 }
 
 float BMPSensor::getVelocity()
-{
+{   
+    static unsigned long prevTime = 0;                   // Previous time
+    static float prevVelocity = 0;                       // Previous velocity
+
+    if (millis() - prevTime < 45) // Update velocity every 45s
+    {
+        return prevVelocity;
+    }
     unsigned long currentTime = millis();                // Get current time
     float currentAltitude = getAltitude();               // Get current altitude
     float deltaTime = (currentTime - prevTime) / 1000.0; // Convert to seconds
@@ -67,7 +74,7 @@ float BMPSensor::getVelocity()
     // Update previous values
     prevAltitude = currentAltitude;
     prevTime = currentTime;
-
+    prevVelocity = velocity;
     return velocity;
 }
 

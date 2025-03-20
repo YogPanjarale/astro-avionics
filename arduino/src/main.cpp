@@ -236,6 +236,31 @@ void setup() {
   digitalWrite(BuzzerPin, LOW);
 }
 
+void serialBeginStuff(bool force = false){
+  static bool setup_done = false;
+  if (force){
+    setup_done = false;
+  }
+  if (setup_done){
+    return;
+  }
+  // begin communication with the raspberry pi
+  SerialRaspi.begin(115200, SERIAL_8N1, RaspiRX, RaspiTX); 
+
+  // begin communication with the e32
+  e32.setup();
+  SerialE32.begin(115200, SERIAL_8N1, E32RX, E32TX);
+
+  setup_done = true;
+}
+
+void sendAllSerial(String data){
+  // possible error , print without initializing serial
+    Serial.println(data); // USB debugging 
+    SerialRaspi.println(data); // Raspi logging
+    e32.sendMessage(data); // Telemetry
+}
+
 void loop() {
   while(state == BOOT) {
     // beep buzzer for 200ms every second till the end of the boot time
@@ -246,18 +271,18 @@ void loop() {
       delay(800);
     }
     setState (CONN);
+    
   }
   while (state == CONN){
-    // begin communication with the raspberry pi
-    SerialRaspi.begin(115200, SERIAL_8N1, RaspiRX, RaspiTX); 
-
-    // begin communication with the e32
-    SerialE32.begin(115200, SERIAL_8N1, E32RX, E32TX);
+    // it will call it only once ;
+    serialBeginStuff();
 
     // connect to raspberry pi
     unsigned long start = millis();
+
+  
     // this loop runs while the time is less than connect time , or  the raspberry pi and lora module are not connected
-    while (millis() - start < CONNECT_TIME ||  (!(status & RPI_h) || !(status & LORA_h))){
+    while (millis() - start < CONNECT_TIME ||  (!(status & RPI_h))){
       // send ping , and wait for pong
       SerialRaspi.println("PING");
       if(SerialRaspi.available()){
@@ -268,14 +293,20 @@ void loop() {
         }
       }
 
-      // send ping to lora module
-      e32.sendMessage("PING");
+      if (SerialE32.available()){
+        e32.sendMessage("PING");
+      }
+
+      // delay 100ms
+      delay(100);
     }
     // beep buzzer long for 2 seconds
     digitalWrite(BuzzerPin, HIGH);
     delay(2000);
     digitalWrite(BuzzerPin, LOW);
     setState(CALIB);
+    sendAllSerial("Connection Established");
+    sendAllSerial("Starting Calibration");
   }
   while (state == CALIB){
     // initialize the sensors and calibrate them
@@ -283,20 +314,24 @@ void loop() {
     if(bmpSensor.begin()){
       status |= BMP_h;
     }
+    else{
+      // inform all
+      sendAllSerial("BMP Sensor not working");
+    }
     // setup the imu
     if (setupIMU()){
       status |= IMU_h;
     }
+    else {
+      // inform all
+      sendAllSerial("IMU not working");
+    }
     
     // play calibration start tone
     playCalibrationStartTone(); // takes 1 second
-    for (int i = 0; i < 10; i++){
-      groundAltitude += bmpSensor.getAltitude();
-      delay(10);
-    }
-    groundAltitude /= 10;
+    groundAltitude = bmpSensor.getAltitude(); // already oversampling 8x , not doing multiple loop 
 
-    SerialRaspi.println("GROUND_ALTITUDE:" + String(groundAltitude));
+    sendAllSerial("GROUND_ALTITUDE:" + String(groundAltitude));
     
     
     // IMU will take 500 samples to calibrate , each 5ms , total 2.5 seconds
@@ -313,16 +348,17 @@ void loop() {
     // read the data from the sensors
     Data data = updateDataWithoutGPS();
     
-    
     // pack data
     String packed_data = packDATA(data);
-    // send the data to the raspberry pi
-    SerialRaspi.println(packed_data);
-    // send the data to Telemetry 
-    e32.sendMessage(packed_data);
+    // send All Serial
+    sendAllSerial(packed_data);
+
     if((BMP_h & status) && (bmpSensor.getAltitude()-groundAltitude>200) || (IMU_h & status) && (getHeightIMU()>200)){
         setState(FLIGHT);
+        sendAllSerial("Entering Flight Mode");
     }
+    // do 50ms delay
+    delay(50);
   }
   /*
   In Flight Mode we only take check bmp altitude and imu Height , IMU tipover
@@ -335,24 +371,26 @@ void loop() {
     
     // pack data
     String packed_data = packDATA(data);
-    // send the data to the raspberry pi
-    SerialRaspi.println(packed_data);
-    // send the data to Telemetry 
-    e32.sendMessage(packed_data);
-    // TODO : if imu not working , do other thing to enter drogue mode
-    // TODO : do other checks
-    if(data.vel_bmp <1 || isRocketTippingOver() || data.vel_imu <1){
+   
+    // send All Serial
+    sendAllSerial(packed_data);
+
+    
+    bool s1 = (data.vel_bmp < 1) && (IMU_h & status) ; // if it is alive , and the velocity is less than 1 m/s
+    bool s2 = isRocketTippingOver() ;
+    bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
+    if(s1||s2||s3){
       status |= TIP_OVER;
       timeof_tip_over = millis();
       // send tip over message to raspi
-      SerialRaspi.println("TIP OVER");
-      e32.sendMessage("TIP OVER");
-      SerialRaspi.println(timeof_tip_over);
+     String tip_over_message = "TIP_OVER: " + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(timeof_tip_over);
+      sendAllSerial(tip_over_message); 
       // update continutity status to make things ready for drogue 
       checkAllEjectionChargeContinuity(true);
       setState(DROGUE);
     }
   }
+  // enter drogue mode just after apogee detection
   while (state == DROGUE)
   {
     // wait for half second after tip over , and deploy drogue.
