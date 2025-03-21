@@ -14,12 +14,12 @@
 #define MAIN_VEL -30  // Negative velocity !!!
 #define BACKUP_VEL -40
 #define seaLevelPressure 101600
-#define chipSelect 5 
+#define chipSelect 5
 #define DROGUE A6
 #define MAIN A7
-#define BACKUP 8
-#define STATUS 9
-#define TEL 10
+#define BACKUP A3
+#define STATUS 7
+#define TEL 6
 
 enum State {LOGGING, GROUND, FLIGHT, DESCENT, LANDING, SHUTDOWN};
 State mode = LOGGING;
