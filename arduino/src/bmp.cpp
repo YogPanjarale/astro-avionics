@@ -57,7 +57,7 @@ float BMPSensor::getVelocity()
     static unsigned long prevTime = 0;                   // Previous time
     static float prevVelocity = 0;                       // Previous velocity
 
-    if (millis() - prevTime < 45) // Update velocity every 45s
+    if (millis() - prevTime < 45) // Update velocity every 45ms
     {
         return prevVelocity;
     }
