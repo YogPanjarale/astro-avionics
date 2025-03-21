@@ -2,10 +2,12 @@
 
 ## Mission requirements
 
-1. flight computer powers, wait for 15 seconds for both boards to power on and boot
-2. next 15 seconds establish connection between the boards, during first 30 seconds.
-3. long beep after 30 seconds
+1. flight computer powers, wait for 15 seconds for both boards to power on and boot , we beep the buzzer every one second
+2. next 15 seconds establish connection between the boards, during first 30 seconds , we still beep every one second.
+3. long beep after 30 seconds for 2 seconds.
 4. get altitude reference , and calibrate IMU
+    - we are doing oversampling , we only do one reading of bmp altitude.
+    - for IMU we do 500 samples , and calibrate IMU.
 5. continuity check should be done on ejection charges , every 300-400 loop cycles
 6. When idle , arduino starts sending all sensor data to raspi , and arduino to telemetery , also keeps checking altitude from BMP and inegrating the IMU acceleration to see if we have entered flight mode
 7. enter flight mode if altitude higher than 200m. , 

@@ -102,3 +102,9 @@ sensorStatus |= RPI          // Set status to true
 sensorStatus &= ~LORA        // Set status to false
 sensorStatus ^= BMP          // Toggle status
 (sensorStatus & IMU) != 0    // Get if a status is true
+
+
+## Data being sent
+
+to e32 we can sent 56 bytes at 9600
+we send 42 char array.
