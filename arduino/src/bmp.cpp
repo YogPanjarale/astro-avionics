@@ -28,7 +28,7 @@ bool BMPSensor::begin()
     bmp.setPressureOversampling(BMP3_OVERSAMPLING_8X);  // new value should be updated every 40ms (25Hz)
 
     // // filtering to reduce noise
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+    // bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3); // DO NOT DO OVERSAMPLING AND IIR
     return true;
 }
 
@@ -36,7 +36,7 @@ float BMPSensor::getAltitude()
 {
     if (!bmp.performReading())
     {
-        Serial.println("Faild to read from BMP390 sensor!");
+        Serial.println("Failed to read from BMP390 sensor!");
         return -1; // Return -1 in case of failure
     }
 
@@ -57,7 +57,7 @@ float BMPSensor::getVelocity()
     static unsigned long prevTime = 0;                   // Previous time
     static float prevVelocity = 0;                       // Previous velocity
 
-    if (millis() - prevTime < 45) // Update velocity every 45s
+    if (millis() - prevTime < 45) // Update velocity every 45ms
     {
         return prevVelocity;
     }
