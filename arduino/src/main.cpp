@@ -21,8 +21,8 @@ BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
 #define GPSTX D0
 
 // define Constants
-#define BOOT_TIME 15000    // time to wait for both systems to boot up
-#define CONNECT_TIME 15000 // time to wait for the connection to be established
+#define BOOT_TIME 1500    // time to wait for both systems to boot up
+#define CONNECT_TIME 1500 // time to wait for the connection to be established
 #define SAFE_PARACHUTE_VEL -30 // safe velocity below which we can deoply parachute
 #define BACKUP_VEL -45
 
@@ -132,6 +132,7 @@ void setState(State s){
 
 
 // state variables
+int groundAltitudeSet = 0;
 float groundAltitude = 0;
 unsigned long timeof_tip_over = 0;
 
@@ -234,6 +235,8 @@ Data updateDataWithoutGPS(){
   data.vel_bmp = bmpSensor.getVelocity();
   checkAllEjectionChargeContinuity();
   data.statusReg = status;
+
+ 
   return data;
 }
 
@@ -271,6 +274,10 @@ void sendAllSerial(String data){
     SerialRaspi.println(data); // Raspi logging
     e32.sendMessage(data); // Telemetry
 }
+
+int s1count = 0;
+int s2count = 0;
+int s3count = 0;
 
 void loop() {
   while(state == BOOT) {
@@ -354,25 +361,43 @@ void loop() {
     
     // play calibration start tone
     playCalibrationStartTone(); // takes 1 second
-    groundAltitude = bmpSensor.getAltitude(); // already oversampling 8x , not doing multiple loop 
-
-    sendAllSerial("GROUND_ALTITUDE:" + String(groundAltitude));
+   
     
     
     // IMU will take 500 samples to calibrate , each 5ms , total 2.5 seconds
-    calibrateIMU(500); 
+    if (status & IMU_h){
+      calibrateIMU(500); 
+    }
+    else{
+      sendAllSerial("IMU Calibration not done ");
+      delay(500);
+    }
 
     // we also check ejection Charge Continutity
     checkAllEjectionChargeContinuity(true);
+    if (status & ECd_h && status & ECm_h && status & ECb_h){
+      sendAllSerial("Ejection Charge Continuity OK");
+    }
+    else {
+      sendAllSerial("Ejection Charge Continuity FAIL");
+    }
+    updateDataWithoutGPS();
+    Data data = updateDataWithoutGPS();
+    groundAltitude = data.bmpAltitude;
+    Serial.print("Ground Altitude: ");
+    Serial.println(groundAltitude);
+    sendAllSerial("GROUND_ALTITUDE:" + String(groundAltitude));
     // play a tone to indicate that the calibration is done
     playCalibrationStartTone(); // takes 1 second
 
     setState(IDLE);
   }
   while (state == IDLE) {
+    unsigned long start = millis();
     // read the data from the sensors
     Data data = updateDataWithoutGPS();
-    
+    Serial.print("Ground Altitude: ");
+    Serial.println(groundAltitude);
     // pack data
     String packed_data = packDATA(data);
     // send All Serial
@@ -382,14 +407,16 @@ void loop() {
         setState(FLIGHT);
         sendAllSerial("Entering Flight Mode");
     }
-    // do 50ms delay
-    delay(50);
+    if (millis()-start<50){
+      delay(50-(millis()-start));
+    }
   }
   /*
   In Flight Mode we only take check bmp altitude and imu Height , IMU tipover
   and buffer that data , and send data
   */
   while(state == FLIGHT){
+    unsigned long start = millis();
     // update Data 
     // read the data from the sensors
     Data data = updateDataWithoutGPS();
@@ -406,6 +433,24 @@ void loop() {
     bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
 
     bool apogee_detected  = false;
+    if (s1){
+      s1count++;
+    }else{
+      s1count = 0;
+    }
+    if (s2){
+      s2count++;
+    }else{
+      s2count = 0;
+    }
+    if (s3){
+      s3count++;
+    }else{
+      s3count = 0;
+    }
+    if (s1count>10 || s2count>1 || s3count>10){
+      apogee_detected = true;
+    }
     if(apogee_detected){
       
       status |= TIP_OVER;
@@ -417,6 +462,7 @@ void loop() {
       checkAllEjectionChargeContinuity(true);
       setState(DROGUE);
     }
+    
   }
   // enter drogue mode just after apogee detection
   while (state == DROGUE)
@@ -492,9 +538,11 @@ void loop() {
      // pack data
      String packed_data = packDATA(data) + packGPSDATA(gps_d);
      // send the data to the raspberry pi
-     SerialRaspi.println(packed_data);
-     // send the data to Telemetry 
-     e32.sendMessage(packed_data);
+    //  SerialRaspi.println(packed_data);
+    //  // send the data to Telemetry 
+    //  e32.sendMessage(packed_data);
+    sendAllSerial(packed_data);
+
 
      // delay 1 sec if vel is <safe Parachute vel
      if(data.vel_bmp<SAFE_PARACHUTE_VEL){
