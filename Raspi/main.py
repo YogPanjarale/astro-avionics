@@ -107,34 +107,6 @@ async def stop_recording():
     else:
         await flight_log("ERROR: stop_recording.sh not found!")
 
-async def high_res_start():
-    script_path = "/home/pi/high_res_start.sh"
-    if os.path.exists(script_path):
-        subprocess.run(["bash", script_path])
-    else:
-        await flight_log("ERROR: high_res_start.sh not found!")
-
-async def high_res_stop():
-    script_path = "/home/pi/high_res_stop.sh"
-    if os.path.exists(script_path):
-        subprocess.run(["bash", script_path])
-    else:
-        await flight_log("ERROR: high_res_stop.sh not found!")
-
-async def high_res_video():
-    while height < 200:
-        await asyncio.sleep(1)
-    while velocity > HIGH_RES_VEL:
-        await asyncio.sleep(0.04)
-    if arduino_status:
-        await stop_recording()
-    await high_res_start()
-    while velocity > -HIGH_RES_VEL:
-        await asyncio.sleep(0.04)
-    await high_res_stop()
-    if arduino_status:
-        await start_recording()
-
 async def deploy_drogue():
     GPIO.output(DROGUE_PIN, GPIO.HIGH)
     await asyncio.sleep(2)
@@ -216,10 +188,9 @@ async def flight_mode():
             counter += 1
         else:
             counter = 0
-        if counter > 6:
+        if counter > 10:
             break
         await asyncio.sleep(0.04)
-    await asyncio.sleep(0.5)
     await flight_log("Apogee detected! Deploying drogue.")
     await deploy_drogue()
         
@@ -254,7 +225,7 @@ async def main():
     GPIO.output(TEL, GPIO.HIGH)
     await start_recording()
     aios = aioserial.AioSerial(port=SERIAL_PORT, baudrate=BAUD_RATE, timeout=1)
-    asyncio.gather(update_vel(), high_res_video())
+    asyncio.create_task(update_vel())
     await asyncio.gather(read_serial(aios), check_failure()) # make sure this function returns if arduino_status is false
     
     # Failure mode
