@@ -1,3 +1,4 @@
+#define TESTING 1
 #include <Arduino.h>
 #include "E32.h"
 #include "triggerEjectionCharges.h"
@@ -21,8 +22,8 @@ BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
 #define GPSTX D0
 
 // define Constants
-#define BOOT_TIME 1500    // time to wait for both systems to boot up
-#define CONNECT_TIME 1500 // time to wait for the connection to be established
+#define BOOT_TIME 30000    // time to wait for both systems to boot up
+#define CONNECT_TIME 15000 // time to wait for the connection to be established
 #define SAFE_PARACHUTE_VEL -30 // safe velocity below which we can deoply parachute
 #define BACKUP_VEL -45
 
@@ -153,13 +154,13 @@ struct Data {
 
 
 
-
+// Data : time(ms) , bmpAltitude(m) , imuAltitude(m) , pressure(Pa) , accel_x(m/s^2) , accel_y(m/s^2) , accel_z(m/s^2) , vel_bmp(m/s) , vel_imu(m/s) , statusReg(16 bit binary)
 String packDATA(Data data){
   String binaryStatus = "";
   for (int i = 15; i >= 0; i--) {
     binaryStatus += String((data.statusReg >> i) & 1);
   }
-  return String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
+  return String(data.time) +',' + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
 }
 
 // checks all ejection charge continuity and updates status
@@ -223,6 +224,41 @@ we ignore change in first 10 readings
 
 Data updateDataWithoutGPS(){
   Data data;
+
+  if (TESTING) {
+    if (Serial.available()){
+      // if input starts with '$' . 
+      //  we parse  it as  #time(ms),altitude(m),accel_y(m/s^2),bmpVel(m/s),imu_vel(m/s),imualt(m)
+      // i.e 10.0,0.0,25.226,0,0,0
+      // read whole line and parse it
+      String input = Serial.readStringUntil('\n');
+      // set bmp and imu to working
+      status |= BMP_h;
+      status |= IMU_h;
+      if (input[0] == '$'){
+        input.remove(0,1);
+        int index = input.indexOf(',');
+        data.time = input.substring(0,index).toInt();
+        input.remove(0,index+1);
+        index = input.indexOf(',');
+        data.bmpAltitude = input.substring(0,index).toFloat();
+        input.remove(0,index+1);
+        index = input.indexOf(',');
+        data.accel_y = input.substring(0,index).toFloat();
+        input.remove(0,index+1);
+        index = input.indexOf(',');
+        data.vel_bmp = input.substring(0,index).toFloat();
+        input.remove(0,index+1);
+        index = input.indexOf(',');
+        data.vel_imu = input.substring(0,index).toFloat();
+        input.remove(0,index+1);
+        index = input.indexOf(',');
+        data.imuAltitude = input.substring(0,index).toFloat();
+        input.remove(0,index+1);
+        data.statusReg = input.toInt();
+        return data;
+      }}
+  }
   data.time = millis();
   data.bmpAltitude = bmpSensor.getAltitude();
   data.pressure = bmpSensor.getPressure();
@@ -269,7 +305,7 @@ void serialBeginStuff(bool force = false){
 
 void sendAllSerial(String data){
   // possible error , print without initializing serial
-  Serial.println("Data: ");
+  //Serial.println("Data: ");
     Serial.println(data); // USB debugging 
     SerialRaspi.println(data); // Raspi logging
     e32.sendMessage(data); // Telemetry
@@ -365,13 +401,7 @@ void loop() {
     
     
     // IMU will take 500 samples to calibrate , each 5ms , total 2.5 seconds
-    if (status & IMU_h){
       calibrateIMU(500); 
-    }
-    else{
-      sendAllSerial("IMU Calibration not done ");
-      delay(500);
-    }
 
     // we also check ejection Charge Continutity
     checkAllEjectionChargeContinuity(true);
@@ -396,14 +426,24 @@ void loop() {
     unsigned long start = millis();
     // read the data from the sensors
     Data data = updateDataWithoutGPS();
-    Serial.print("Ground Altitude: ");
-    Serial.println(groundAltitude);
     // pack data
     String packed_data = packDATA(data);
     // send All Serial
     sendAllSerial(packed_data);
+    // debug is tipover
+    if (isRocketTippingOver()){
+      sendAllSerial("TIP OVER DETECTED");
+    }
 
-    if((BMP_h & status) && (bmpSensor.getAltitude()-groundAltitude>200) || (IMU_h & status) && (getHeightIMU()>200)){
+    if (data.bmpAltitude<0){
+      // beep buzzer
+      digitalWrite(BuzzerPin, HIGH);
+      delay(50);
+      digitalWrite(BuzzerPin, LOW);
+      delay(150);
+    }
+
+    if((BMP_h & status) && (bmpSensor.getAltitude()-groundAltitude>200)){
         setState(FLIGHT);
         sendAllSerial("Entering Flight Mode");
     }
@@ -430,8 +470,8 @@ void loop() {
     
     bool s1 = (data.vel_bmp < 1) && (IMU_h & status) ; // if it is alive , and the velocity is less than 1 m/s
     bool s2 = isRocketTippingOver() ;
-    bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
-
+    //bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
+    bool s3 = false;
     bool apogee_detected  = false;
     if (s1){
       s1count++;
@@ -498,6 +538,9 @@ void loop() {
     if (data.bmpAltitude < 500  || data.vel_bmp < SAFE_PARACHUTE_VEL){
       // we try to deoply parachute
       triggerMainEjectionCharges(2000);
+      sendAllSerial("Trying to deploy MAIN parachute");
+      delay(100); // wait for 100ms and check if deployment was success
+      sendAllSerial("Entering Recovery Mode");
       state = RECOVERY;
       /*
       triggerMainEjectionCharges(2000);
@@ -555,10 +598,12 @@ void loop() {
       
       Data data = updateDataWithoutGPS();
       
-    // do other things if vel is high
-    if(data.vel_bmp < BACKUP_VEL || data.vel_imu < BACKUP_VEL) // If velocity is very high we trigger backup
-      triggerBackupEjectionCharges(2000); // Pray after this cuz yes.
-
+    // do  things if vel is high
+    if(data.vel_bmp < BACKUP_VEL || data.vel_imu < BACKUP_VEL){ // If velocity is very high we trigger backup
+      triggerBackupEjectionCharges(2000); 
+    }else {
+      // Pray after this cuz yes.
+    }
      // read gps 
      GPSData gps_d = readGPSData();
 

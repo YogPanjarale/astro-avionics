@@ -10,7 +10,6 @@ BMPSensor::BMPSensor(int sda, int scl) : sdaPin(sda), sclPin(scl) {}
 
 bool BMPSensor::begin()
 {
-    // start serial port at 115200 bps:
     pinMode(10, OUTPUT);
     digitalWrite(10, HIGH);
     Wire.begin(sdaPin, sclPin); // Start I2C with defined pins
