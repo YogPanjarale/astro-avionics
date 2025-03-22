@@ -4,7 +4,7 @@
 #include <math.h>
 #include <Wire.h>
 
-#define seaLevelPressure 101325 // Standard sea-level pressure in Pascals
+#define seaLevelPressure 101520 // Standard sea-level pressure in Pascals
 
 BMPSensor::BMPSensor(int sda, int scl) : sdaPin(sda), sclPin(scl) {}
 

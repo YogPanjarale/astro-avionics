@@ -18,7 +18,7 @@ void E32Module::sendMessage(String message) {
     
     message.getBytes(byteArray, length + 1); // Convert String to byte array
 
-    Serial.print("Broadcasting: ");
+    //Serial.print("Broadcasting: ");
     //Serial.println(message);  // Debugging output
 
     e32Serial.write(byteArray, length); 

@@ -23,12 +23,16 @@ BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
 // define Constants
 #define BOOT_TIME 15000    // time to wait for both systems to boot up
 #define CONNECT_TIME 15000 // time to wait for the connection to be established
-#define SAFE_PARACHUTE_VEL 2 // safe velocity below which we can deoply parachute
+#define SAFE_PARACHUTE_VEL -30 // safe velocity below which we can deoply parachute
+#define BACKUP_VEL -45
 
+#define SerialRaspi Serial2
+#define SerialE32 Serial1
+#define SerialGPS Serial0
 // Define serial ports
-HardwareSerial SerialE32(1);   // Use UART1 (A3 RX, A2 TX)
-HardwareSerial SerialRaspi(2); // Use UART2 (A6 RX, A7 TX)
-HardwareSerial SerialGPS(3); //Use UART3 (D0 TX, D1 RX)
+// HardwareSerial SerialE32(1);   // Use UART1 (A3 RX, A2 TX)
+// HardwareSerial SerialRaspi(2); // Use UART2 (A6 RX, A7 TX)
+// HardwareSerial SerialGPS(3); //Use UART3 (D0 TX, D1 RX)
 E32Module e32(SerialE32);
 
 
@@ -52,6 +56,8 @@ E32Module e32(SerialE32);
 #define S12_h    (1 << 13) // state bit 2
 // is tip over detected is 14th bit
 #define TIP_OVER (1 << 14)
+// if the drouge delopyment is confirmed
+#define DROGUE_DEPLOYED (1 << 15)
 // binary status register
 // 0b0000000000000000 
 // bit 0: raspberry pi status
@@ -63,6 +69,7 @@ E32Module e32(SerialE32);
 // bit 8,9,10: ejection charge status (drogue, main, backup)
 // bit 11,12,13: state of the rocket
 // bit 14: TIP_OVER
+// bit 15: DROGUE_DEPLOYED
 uint16_t status = 0b0000000000000000;
 // define ejection charge status register
 
@@ -77,6 +84,8 @@ enum State {
   PARACHUTE,
   RECOVERY,
 };
+
+State state = BOOT;
 
 void setState(State s){
   // update the status register , set the state bits
@@ -116,11 +125,11 @@ void setState(State s){
   default:
     break;
   }
+  state = s;
 
 
 }
 
-State state = BOOT;
 
 // state variables
 float groundAltitude = 0;
@@ -149,7 +158,7 @@ String packDATA(Data data){
   for (int i = 15; i >= 0; i--) {
     binaryStatus += String((data.statusReg >> i) & 1);
   }
-  return "DATA:" + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
+  return String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
 }
 
 // checks all ejection charge continuity and updates status
@@ -230,6 +239,7 @@ Data updateDataWithoutGPS(){
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("BOOT start");
 
   // initialize the buzzer
   pinMode(BuzzerPin, OUTPUT);
@@ -256,6 +266,7 @@ void serialBeginStuff(bool force = false){
 
 void sendAllSerial(String data){
   // possible error , print without initializing serial
+  Serial.println("Data: ");
     Serial.println(data); // USB debugging 
     SerialRaspi.println(data); // Raspi logging
     e32.sendMessage(data); // Telemetry
@@ -263,26 +274,28 @@ void sendAllSerial(String data){
 
 void loop() {
   while(state == BOOT) {
+    Serial.println("BOOT");
     // beep buzzer for 200ms every second till the end of the boot time
     for(int i = 0; i < BOOT_TIME; i+=1000) {
       digitalWrite(BuzzerPin, HIGH);
       delay(200);
       digitalWrite(BuzzerPin, LOW);
       delay(800);
+      Serial.println(i); 
     }
     setState (CONN);
-    
+    Serial.println("Entering Conn");
   }
   while (state == CONN){
     // it will call it only once ;
     serialBeginStuff();
+    Serial.println("Serial Stuff Begin");
 
     // connect to raspberry pi
     unsigned long start = millis();
 
-  
-    // this loop runs while the time is less than connect time , or  the raspberry pi and lora module are not connected
-    while (millis() - start < CONNECT_TIME ||  (!(status & RPI_h))){
+    // this loop runs while the time is less than connect time , or  the raspberry pi and lora module are not connected 
+    while (((millis() - start) < CONNECT_TIME )&& (!(status & RPI_h))){
       // send ping , and wait for pong
       SerialRaspi.println("PING");
       if(SerialRaspi.available()){
@@ -295,10 +308,22 @@ void loop() {
 
       if (SerialE32.available()){
         e32.sendMessage("PING");
+        status |= LORA_h;
       }
 
       // delay 100ms
-      delay(100);
+      Serial.print(".");
+      Serial.println(millis() - start );
+      digitalWrite(BuzzerPin, HIGH);
+      delay(50);
+      digitalWrite(BuzzerPin, LOW);
+      delay(50);
+
+    }
+    Serial.println("Connect end");
+    // print if raspi connect was fail
+    if(!(status&RPI_h)){
+      Serial.println("Raspi Connect fail");
     }
     // beep buzzer long for 2 seconds
     digitalWrite(BuzzerPin, HIGH);
@@ -379,11 +404,14 @@ void loop() {
     bool s1 = (data.vel_bmp < 1) && (IMU_h & status) ; // if it is alive , and the velocity is less than 1 m/s
     bool s2 = isRocketTippingOver() ;
     bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
-    if(s1||s2||s3){
+
+    bool apogee_detected  = false;
+    if(apogee_detected){
+      
       status |= TIP_OVER;
       timeof_tip_over = millis();
       // send tip over message to raspi
-     String tip_over_message = "TIP_OVER: " + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(timeof_tip_over);
+     String tip_over_message = "APOGEE DETECTED: " + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(timeof_tip_over);
       sendAllSerial(tip_over_message); 
       // update continutity status to make things ready for drogue 
       checkAllEjectionChargeContinuity(true);
@@ -393,36 +421,40 @@ void loop() {
   // enter drogue mode just after apogee detection
   while (state == DROGUE)
   {
+
     // wait for half second after tip over , and deploy drogue.
     if (millis()-timeof_tip_over > 500){
-      triggerDrogueEjectionCharges();
+      triggerDrogueEjectionCharges(2000);
       delay(100); // wait for 100ms and check if deployment was success
       int status_d = checkDrogueEjectionCharges();
       if (!status_d){
         // drogue deoplyment is confirmed
         status |= ECrd_h; // update ejection charge drogue deployment to 1
         status &= ~ECd_h; // update ejection charge drogue continuity to 0
-        SerialRaspi.println("DROGUE Deployed");
-        e32.sendMessage("DROGUE Deployed");
+        sendAllSerial("DROGUE Deployed, Enter Parachute mode");
         setState(PARACHUTE);
+        status |= DROGUE_DEPLOYED; // update drogue deployment status
       }
       else {
-        // pray
+
+        // pray and enter parachute mode
+        sendAllSerial("DROGUE Deploy FAILED , Entering parachute mode");
+        setState(PARACHUTE);
+        
       }
-    }
-    // return out of drogue state to parachute if drogue is not deployed in few seconds 
-    if (millis()-timeof_tip_over > 5000){
-      SerialRaspi.println("TIMEOUT of DROGUE , Entering parachute mode");
-      e32.sendMessage("TIMEOUT of DROGUE , Entering parachute mode");
     }
    
   }
   while(state == PARACHUTE){
     // we send all data , turn on gps , and wait for height to reach below 500m , and deploy parachute , if it does not deploy we try backup
     Data data = updateDataWithoutGPS();
-    if (data.bmpAltitude < 500 && data.vel_imu < SAFE_PARACHUTE_VEL){
+    // > because minus
+    if (data.bmpAltitude < 500  || data.vel_bmp < SAFE_PARACHUTE_VEL){
       // we try to deoply parachute
-      triggerMainEjectionCharges();
+      triggerMainEjectionCharges(2000);
+      state = RECOVERY;
+      /*
+      triggerMainEjectionCharges(2000);
       delay(100); // wait for 100ms and check if deployment was success
       int status_d = checkMainEjectionCharges();
       if (!status_d){
@@ -437,7 +469,7 @@ void loop() {
         SerialRaspi.println("MAIN Parachute Deploy FAILED , trying backup ");
         e32.sendMessage("MAIN parachue Deploy FAILED , trying backup");
         // try backup
-        triggerBackupEjectionCharges();
+        triggerBackupEjectionCharges(2000);
         delay(100); // wait for 100ms and check if deployment was success
         int status_d = checkBackupEjectionCharges();
         if (!status_d){
@@ -452,6 +484,7 @@ void loop() {
           // pray
         }
       }
+      */
     }
     // read gps 
     GPSData gps_d = readGPSData();
@@ -467,10 +500,17 @@ void loop() {
      if(data.vel_bmp<SAFE_PARACHUTE_VEL){
       delay(1000);
      } 
-  }
-  while (state== RECOVERY)
-  {
-    Data data = updateDataWithoutGPS();
+    }
+    while (state== RECOVERY)
+    {
+      
+      
+      Data data = updateDataWithoutGPS();
+      
+    // do other things if vel is high
+    if(data.vel_bmp < BACKUP_VEL || data.vel_imu < BACKUP_VEL) // If velocity is very high we trigger backup
+      triggerBackupEjectionCharges(2000); // Pray after this cuz yes.
+
      // read gps 
      GPSData gps_d = readGPSData();
 
@@ -493,7 +533,6 @@ void loop() {
         pinMode(BuzzerPin,LOW);
         delay(500);
      }
-     // do other things if vel is high
   }
   
 
