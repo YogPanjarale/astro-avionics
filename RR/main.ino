@@ -1,11 +1,10 @@
 #include <Wire.h>
-
 #include <Adafruit_BMP3XX.h>
 #include <bmp3.h>
 #include <bmp3_defs.h>
-
 #include <SD.h>
 #include <SPI.h>
+#include <SoftwareSerial.h>
 
 #define LOGDIR "/logs"
 #define ALTLOG "/logs/altlog.txt"
@@ -20,7 +19,10 @@
 #define BACKUP A3
 #define STATUS 7
 #define TEL 6
+#define ARX A1
+#define ATX A0
 
+SoftwareSerial Serial1(ARX, ATX);
 enum State {LOGGING, GROUND, FLIGHT, DESCENT, LANDING, SHUTDOWN};
 State mode = LOGGING;
 Adafruit_BMP3XX bmp;
@@ -42,7 +44,7 @@ float getVelocity(){
   static float prevVelocity = 0;                       // Previous velocity
 
   if (millis() - prevTime < 45){// Update velocity every 45ms
-    prevVelocity;
+    return prevVelocity;
   }
   unsigned long currentTime = millis();                // Get current time
   float currentAltitude = getAltitude();               // Get current altitude
@@ -98,8 +100,8 @@ void statusLED(){
 }
 
 void setup(){
-  Serial.begin(9600);
-  Serial1.begin(9600);
+  Serial.begin(115200);
+  Serial1.begin(115200);
 
   // BMP init
   Wire.begin();
@@ -143,15 +145,21 @@ void loop(){
       statusLED();
       unsigned long int last_packet_time = millis();
       String data = "";
-      while(1){
+      bool arduino_status = 1;
+      while(arduino_status){
         if(Serial1.available()){
           data = Serial1.readStringUntil('\n');
           if(data != ""){
             data.trim();
             writeLog(data);
             last_packet_time = millis();
-            if(data == "EXIT"){
+            switch(data){
+              case "EXIT":
               mode = SHUTDOWN;
+              arduino_status = 0;
+              break;
+              case "PING":
+              Serial1.println("PONG");
               break;
             }
           }
@@ -160,7 +168,7 @@ void loop(){
           mode = GROUND;
           statusLED();
           writeLog("Arduino timed out entering failure state!");
-          break;
+          arduino_status = 0;
         }
       }
       break;
@@ -200,10 +208,10 @@ void loop(){
         writeLog("Deploying backup!");
         triggerCharge(BACKUP);
       }
-      if(abs(getVelocity()) < 2)
+      if(abs(getVelocity()) < 2.5)
         counter ++;
       else
-        counter --;
+        counter = 0;
       if(counter > 10){
         counter = 0;
         writeLog("Detected landing!");

@@ -8,7 +8,7 @@ import board
 import busio
 import adafruit_bmp3xx
 import RPi.GPIO as GPIO
-# pip install aioserial Rpi.GPIO adafruit-circuitpython-bmp3xx
+# pip install aioserial Rpi.GPIO adafruit-circuitpython-bmp3xx adafruit-blinka
 # enable i2c and serial in raspi config
 # https://www.waveshare.com/wiki/BMP390_Barometric_Pressure_Sensor
 
@@ -21,13 +21,13 @@ i2c = busio.I2C(board.SCL, board.SDA)
 bmp = adafruit_bmp3xx.BMP3XX_I2C(i2c, address=0x77) # install i2c tools and verify address with $ i2cdetect -y 1
 bmp.pressure_oversampling = 8
 bmp.temperature_oversampling = 4
-bmp.sea_level_pressure = 1012 # Set this before flight!
+bmp.sea_level_pressure = 1015 # Set this before flight!
 
 # constants
 FLIGHT_LOG = os.path.join(log_dir, time.strftime("flight_%H%M%S.log"))
 BMP_LOG = os.path.join(log_dir, time.strftime("bmp_%H%M%S.log"))
 TIMEOUT = 20
-SERIAL_PORT = "/dev/serial0"
+SERIAL_PORT = '/dev/ttyS0'
 HIGH_RES_VEL = 30  # Ask garg
 BAUD_RATE = 115200
 DROGUE_PIN = 27
@@ -38,7 +38,8 @@ MAIN_VEL = -40 # This should be negative!
 MAIN_HEIGHT = 500
 FLIGHTMODE_ALT = 200
 GROUND_ALT = bmp.altitude
-BUFFER_SIZE = 50
+FLIGHT_BUFFER_SIZE = 25
+VEL_BUFFER_SIZE = 50
 
 # GPIO init
 GPIO.setmode(GPIO.BCM) 
@@ -62,7 +63,7 @@ previous_time = time.monotonic()
 async def flight_log(data):
     global flight_buffer
     flight_buffer.append(f"{time.strftime('%H:%M:%S')} - {data}")
-    if len(flight_buffer) >= BUFFER_SIZE:
+    if len(flight_buffer) >= FLIGHT_BUFFER_SIZE:
         await asyncio.to_thread(write_to_flight)
 
 def write_to_flight():
@@ -76,7 +77,7 @@ def write_to_flight():
 async def vel_log(data):
     global vel_buffer
     vel_buffer.append(f"{time.strftime('%H:%M:%S')} - {data}")
-    if len(vel_buffer) >= BUFFER_SIZE:
+    if len(vel_buffer) >= VEL_BUFFER_SIZE:
         await asyncio.to_thread(write_to_vel)
 
 def write_to_vel():
@@ -107,34 +108,6 @@ async def stop_recording():
     else:
         await flight_log("ERROR: stop_recording.sh not found!")
 
-async def high_res_start():
-    script_path = "/home/pi/high_res_start.sh"
-    if os.path.exists(script_path):
-        subprocess.run(["bash", script_path])
-    else:
-        await flight_log("ERROR: high_res_start.sh not found!")
-
-async def high_res_stop():
-    script_path = "/home/pi/high_res_stop.sh"
-    if os.path.exists(script_path):
-        subprocess.run(["bash", script_path])
-    else:
-        await flight_log("ERROR: high_res_stop.sh not found!")
-
-async def high_res_video():
-    while height < 200:
-        await asyncio.sleep(1)
-    while velocity > HIGH_RES_VEL:
-        await asyncio.sleep(0.04)
-    if arduino_status:
-        await stop_recording()
-    await high_res_start()
-    while velocity > -HIGH_RES_VEL:
-        await asyncio.sleep(0.04)
-    await high_res_stop()
-    if arduino_status:
-        await start_recording()
-
 async def deploy_drogue():
     GPIO.output(DROGUE_PIN, GPIO.HIGH)
     await asyncio.sleep(2)
@@ -160,8 +133,6 @@ async def read_serial(aios):
             await flight_log(data)
 
             match data:
-                case "STOPREC":
-                    await stop_recording()
                 case "PING":
                     await aios.write_async(b"PONG\n")
                 case "EXIT":
@@ -216,10 +187,9 @@ async def flight_mode():
             counter += 1
         else:
             counter = 0
-        if counter > 6:
+        if counter > 10:
             break
         await asyncio.sleep(0.04)
-    await asyncio.sleep(0.5)
     await flight_log("Apogee detected! Deploying drogue.")
     await deploy_drogue()
         
@@ -254,9 +224,9 @@ async def main():
     GPIO.output(TEL, GPIO.HIGH)
     await start_recording()
     aios = aioserial.AioSerial(port=SERIAL_PORT, baudrate=BAUD_RATE, timeout=1)
-    asyncio.gather(update_vel(), high_res_video())
+    asyncio.create_task(update_vel())
     await asyncio.gather(read_serial(aios), check_failure()) # make sure this function returns if arduino_status is false
-    
+
     # Failure mode
     await flight_log("Entered failure mode.")
     GPIO.output(TEL, GPIO.LOW)
