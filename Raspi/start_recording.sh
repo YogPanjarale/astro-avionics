@@ -1,8 +1,4 @@
 #!/bin/bash
 
-# Define timestamp format
-TIMESTAMP=$(date +"%d%m_%H%M%S")
-FILE = "$HOME/Videos/flight_$TIMESTAMP.h264"
-
-# Start video recording in a new process group
-libcamera-vid -t 0 --height 1080 --framerate 60 -o $FILE &
+# Recording @720p
+libcamera-vid -t 0 --width 1280 --height 720 --framerate 80 -o $HOME/Videos/flight_$(data +"%d%m_%H%M%S").mp4 &
