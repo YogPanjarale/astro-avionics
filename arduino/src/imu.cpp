@@ -121,7 +121,7 @@ bool isRocketTippingOver()
     float accelY = accel.acceleration.y - accelBiasY;
 
     // Define thresholds
-    const float PITCH_THRESHOLD = 90.0;  // Degrees
+    const float PITCH_THRESHOLD = 45.0;  // Degrees ( from testing)
     const float GYRO_X_THRESHOLD = 1.0;  // Rad/s (adjust based on testing)
     const float ACCEL_Y_DROP_THRESHOLD = 3.0;  // m/s² (low acceleration means freefall)
     Serial.print("Pitch: ");

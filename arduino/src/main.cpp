@@ -8,6 +8,7 @@
 #include "imu.h"
 #include "buzzer.h"
 
+
 #define BMP_SDA A4
 #define BMP_SCL A5
 BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
@@ -300,6 +301,7 @@ void serialBeginStuff(bool force = false){
   e32.setup();
   SerialE32.begin(115200, SERIAL_8N1, E32RX, E32TX);
 
+  
   setup_done = true;
 }
 
@@ -595,7 +597,6 @@ void loop() {
     while (state== RECOVERY)
     {
       
-      
       Data data = updateDataWithoutGPS();
       
     // do  things if vel is high
@@ -604,6 +605,8 @@ void loop() {
     }else {
       // Pray after this cuz yes.
     }
+    setupGPS();
+
      // read gps 
      GPSData gps_d = readGPSData();
 
