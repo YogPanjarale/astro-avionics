@@ -28,7 +28,6 @@ FLIGHT_LOG = os.path.join(log_dir, time.strftime("flight_%H%M%S.log"))
 BMP_LOG = os.path.join(log_dir, time.strftime("bmp_%H%M%S.log"))
 TIMEOUT = 20
 SERIAL_PORT = '/dev/ttyS0'
-HIGH_RES_VEL = 30  # Ask garg
 BAUD_RATE = 115200
 DROGUE_PIN = 27
 MAIN_PIN = 17
