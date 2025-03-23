@@ -162,7 +162,7 @@ String packDATA(Data data){
   for (int i = 15; i >= 0; i--) {
     binaryStatus += String((data.statusReg >> i) & 1);
   }
-  String imuData = String(data.imuReading.accel_x) + "," + String(data.imuReading.accel_y) + "," + String(data.imuReading.accel_z) + "," + String(data.imuReading.roll) + "," + String(data.imuReading.yaw) + "," + String(data.imuReading.pitch) + "," + String(data.imuReading.temp);
+  String imuData = String(data.imuReading.accel_x) + "," + String(data.imuReading.accel_y) + "," + String(data.imuReading.accel_z) + "," + String(data.imuReading.roll) + "," + String(data.imuReading.yaw) + "," + String(data.imuReading.pitch) + "," + String(data.imuReading.temp)+ ',' + String(data.imuReading.gyro_x) + ',' + String(data.imuReading.gyro_y) + ',' + String(data.imuReading.gyro_z);
   String s = String(data.time) +',' + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + imuData+ "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
   return s;
 }
@@ -298,7 +298,7 @@ void serialBeginStuff(bool force = false){
     return;
   }
   // begin communication with the raspberry pi
-  SerialRaspi.begin(115200, SERIAL_8N1, RaspiTX, RaspiRX); 
+  SerialRaspi.begin(115200, SERIAL_8N1, A7, A6); 
 
   // begin communication with the e32
   e32.setup();

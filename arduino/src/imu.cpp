@@ -69,14 +69,31 @@ IMUReading readIMU()
     reading.accel_x = accel.acceleration.x - accelBiasX;
     reading.accel_y = accel.acceleration.y - accelBiasY;
     reading.accel_z = accel.acceleration.z - accelBiasZ;
-    reading.roll = atan2(accel.acceleration.y - accelBiasY, accel.acceleration.z - accelBiasZ) * 180 / PI;
-    reading.pitch = atan2(-(accel.acceleration.x - accelBiasX),
-                          sqrt(pow(accel.acceleration.y - accelBiasY, 2) + pow(accel.acceleration.z - accelBiasZ, 2))) *
-                    180 / PI;
+    // reading.roll = atan2(accel.acceleration.y - accelBiasY, accel.acceleration.z - accelBiasZ) * 180 / PI;
+    // reading.pitch = atan2(-(accel.acceleration.x - accelBiasX),
+    //                       sqrt(pow(accel.acceleration.y - accelBiasY, 2) + pow(accel.acceleration.z - accelBiasZ, 2))) *
+    //                 180 / PI;
 
-    reading.yaw = (gyro.gyro.z - gyroBiasZ); // Only raw value, fusion needed for accurate yaw
+    // reading.yaw = (gyro.gyro.z - gyroBiasZ); // Only raw value, fusion needed for accurate yaw
+
+    // ROLL (rotation around X-axis)
+reading.roll = atan2(accel.acceleration.z - accelBiasZ, 
+    accel.acceleration.y - accelBiasY) * 180 / PI;
+
+// PITCH (rotation around Z-axis)
+reading.pitch = atan2(-(accel.acceleration.x - accelBiasX),
+     sqrt(pow(accel.acceleration.z - accelBiasZ, 2) + 
+          pow(accel.acceleration.y - accelBiasY, 2))) * 180 / PI;
+
+// YAW remains similar (requires gyro integration)
+reading.yaw = (gyro.gyro.z - gyroBiasZ); 
+
 
     reading.temp = temp.temperature;
+
+    reading.gyro_x = gyro.gyro.x - gyroBiasX;
+    reading.gyro_y = gyro.gyro.y - gyroBiasY;
+    reading.gyro_z = gyro.gyro.z - gyroBiasZ;
 
     return reading;
 }
@@ -130,7 +147,7 @@ bool isRocketTippingOver(IMUReading reading)
     float pitch = reading.pitch;
     float roll = reading.roll;
     float yaw = reading.yaw;
-    float gyroX = reading.accel_x;
+    float gyroX = reading.gyro_x;
     float accelY = reading.accel_y;
     // Define thresholds
     const float PITCH_THRESHOLD = 45.0;  // Degrees ( from testing)
@@ -140,7 +157,7 @@ bool isRocketTippingOver(IMUReading reading)
     Serial.println(pitch);
     Serial.print("Roll: ");
     Serial.println(roll);
-    Serial.print("Yaw: ");
+    Serial.print("Yaw: ");      
     Serial.println(yaw);
     Serial.print("Gyro X: ");
     Serial.println(gyroX);
