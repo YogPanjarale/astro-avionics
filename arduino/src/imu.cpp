@@ -10,11 +10,13 @@ float height = 0;
 unsigned long prevTime = 0;
 IMUReading prevIMUReading = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevI = 0;
-
+float angle_x = 0, angle_y = 0;
 
 // return 1 if setup is successful, 0 otherwise
-int setupIMU(){
-    if (!icm.begin_I2C()) {
+int setupIMU()
+{
+    if (!icm.begin_I2C())
+    {
         Serial.println("Failed to find ICM20649 chip");
         return 0;
     }
@@ -77,17 +79,18 @@ IMUReading readIMU()
     // reading.yaw = (gyro.gyro.z - gyroBiasZ); // Only raw value, fusion needed for accurate yaw
 
     // ROLL (rotation around X-axis)
-reading.roll = atan2(accel.acceleration.z - accelBiasZ, 
-    accel.acceleration.y - accelBiasY) * 180 / PI;
+    reading.roll = atan2(accel.acceleration.z - accelBiasZ,
+                         accel.acceleration.y - accelBiasY) *
+                   180 / PI;
 
-// PITCH (rotation around Z-axis)
-reading.pitch = atan2(-(accel.acceleration.x - accelBiasX),
-     sqrt(pow(accel.acceleration.z - accelBiasZ, 2) + 
-          pow(accel.acceleration.y - accelBiasY, 2))) * 180 / PI;
+    // PITCH (rotation around Z-axis)
+    reading.pitch = atan2(-(accel.acceleration.x - accelBiasX),
+                          sqrt(pow(accel.acceleration.z - accelBiasZ, 2) +
+                               pow(accel.acceleration.y - accelBiasY, 2))) *
+                    180 / PI;
 
-// YAW remains similar (requires gyro integration)
-reading.yaw = (gyro.gyro.z - gyroBiasZ); 
-
+    // YAW remains similar (requires gyro integration)
+    reading.yaw = (gyro.gyro.z - gyroBiasZ);
 
     reading.temp = temp.temperature;
 
@@ -108,14 +111,15 @@ float getVelocityIMU()
     icm.getEvent(&accel, &gyro, &temp);
 
     float accelY = accel.acceleration.y - accelBiasY; // Remove bias
-    
-    //REMOVE NOISE???
+
+    // REMOVE NOISE???
 
     velocityY += accelY * dt; // Integrate acceleration to get velocity
     return velocityY;
 }
 
-float getHeightIMU(){
+float getHeightIMU()
+{
     unsigned long currentTime = millis();
     float dt = (currentTime - prevTime) / 1000.0; // Convert to seconds
     prevTime = currentTime;
@@ -124,8 +128,8 @@ float getHeightIMU(){
     icm.getEvent(&accel, &gyro, &temp);
 
     float accelY = accel.acceleration.y - accelBiasY; // Remove bias
-    
-    //REMOVE NOISE???
+
+    // REMOVE NOISE???
 
     velocityY += accelY * dt; // Integrate acceleration to get velocity
     height += velocityY * dt; // Integrate velocity to get height
@@ -134,7 +138,6 @@ float getHeightIMU(){
 
 bool isRocketTippingOver(IMUReading reading)
 {
-   
 
     // // 0.3 ohm + 0.3ohm  0.750*0.6 = 0.45V
     // power consumption = 0.45V * 0.45V / 0.3ohm = 0.675W
@@ -148,26 +151,34 @@ bool isRocketTippingOver(IMUReading reading)
     float roll = reading.roll;
     float yaw = reading.yaw;
     float gyroX = reading.gyro_x;
+    float gyroY = reading.gyro_y;
+    float gyroZ = reading.gyro_z;
     float accelY = reading.accel_y;
     // Define thresholds
-    const float PITCH_THRESHOLD = 45.0;  // Degrees ( from testing)
-    const float GYRO_X_THRESHOLD = 1.0;  // Rad/s (adjust based on testing)
-    const float ACCEL_Y_DROP_THRESHOLD = 3.0;  // m/s² (low acceleration means freefall)
+    const float ANGLE_X_THRESHOLD = 45.0;     // Degrees ( from testing)
+    const float ANGLE_Y_THRESHOLD = 45.0;     // Rad/s (adjust based on testing)
+    const float ACCEL_Y_DROP_THRESHOLD = 3.0; // m/s² (low acceleration means freefall)
     Serial.print("Pitch: ");
     Serial.println(pitch);
     Serial.print("Roll: ");
     Serial.println(roll);
-    Serial.print("Yaw: ");      
+    Serial.print("Yaw: ");
     Serial.println(yaw);
     Serial.print("Gyro X: ");
     Serial.println(gyroX);
     Serial.print("Accel Y: ");
     Serial.println(accelY);
 
+    unsigned long currentTime = millis();
+    float dt = (currentTime - prevTime) / 1000.0; // Convert to seconds
+    prevTime = currentTime;
+    angle_x += gyroX * dt;
+    angle_z += gyroZ * dt;
+
     // Check if pitch is too large or tipping too fast
-    if (abs(pitch) > PITCH_THRESHOLD || abs(gyroX) > GYRO_X_THRESHOLD || accelY < ACCEL_Y_DROP_THRESHOLD)
+    if (abs(angle_x) > ANGLE_X_THRESOLD || abs(angle_y) > ANGLE_Y_THRESHOLD)
     {
-        return true;  // Rocket is tipping over
+        return true; // Rocket is tipping over
     }
     return false;
 }
