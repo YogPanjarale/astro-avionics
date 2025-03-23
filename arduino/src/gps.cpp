@@ -11,7 +11,7 @@ void setupGPS(){
         return;
     }
     // setup the gps module
-    Serial0.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+    Serial0.begin(9600, SERIAL_8N1, GPS_TX, GPS_RX);
 }
 
 GPSData readGPSData(){

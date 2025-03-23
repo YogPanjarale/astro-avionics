@@ -23,8 +23,8 @@ BMPSensor bmpSensor(BMP_SDA, BMP_SCL);
 #define GPSTX D0
 
 // define Constants
-#define BOOT_TIME 30000    // time to wait for both systems to boot up
-#define CONNECT_TIME 15000 // time to wait for the connection to be established
+#define BOOT_TIME 3000    // time to wait for both systems to boot up
+#define CONNECT_TIME 1500 // time to wait for the connection to be established
 #define SAFE_PARACHUTE_VEL -30 // safe velocity below which we can deoply parachute
 #define BACKUP_VEL -45
 
@@ -275,7 +275,7 @@ Data updateDataWithoutGPS(){
   data.vel_bmp = bmpSensor.getVelocity();
   checkAllEjectionChargeContinuity();
   data.statusReg = status;
-
+  data.imuReading = reading_i;
  
   return data;
 }
@@ -298,11 +298,11 @@ void serialBeginStuff(bool force = false){
     return;
   }
   // begin communication with the raspberry pi
-  SerialRaspi.begin(115200, SERIAL_8N1, RaspiRX, RaspiTX); 
+  SerialRaspi.begin(115200, SERIAL_8N1, RaspiTX, RaspiRX); 
 
   // begin communication with the e32
   e32.setup();
-  SerialE32.begin(115200, SERIAL_8N1, E32RX, E32TX);
+  SerialE32.begin(115200, SERIAL_8N1, E32TX, E32RX);
 
   
   setup_done = true;
