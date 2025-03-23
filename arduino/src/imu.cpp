@@ -10,7 +10,7 @@ float height = 0;
 unsigned long prevTime = 0;
 IMUReading prevIMUReading = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevI = 0;
-float angle_x = 0, angle_y = 0;
+float angle_x = 0, angle_z = 0;
 
 // return 1 if setup is successful, 0 otherwise
 int setupIMU()
@@ -156,7 +156,7 @@ bool isRocketTippingOver(IMUReading reading)
     float accelY = reading.accel_y;
     // Define thresholds
     const float ANGLE_X_THRESHOLD = 45.0;     // Degrees ( from testing)
-    const float ANGLE_Y_THRESHOLD = 45.0;     // Rad/s (adjust based on testing)
+    const float ANGLE_Z_THRESHOLD = 45.0;     // Rad/s (adjust based on testing)
     const float ACCEL_Y_DROP_THRESHOLD = 3.0; // m/s² (low acceleration means freefall)
     Serial.print("Pitch: ");
     Serial.println(pitch);
@@ -172,11 +172,15 @@ bool isRocketTippingOver(IMUReading reading)
     unsigned long currentTime = millis();
     float dt = (currentTime - prevTime) / 1000.0; // Convert to seconds
     prevTime = currentTime;
-    angle_x += gyroX * dt;
-    angle_z += gyroZ * dt;
-
+    float alpha = 0.98;                                             // Adjust based on testing
+    angle_x = alpha * (angle_x + gyroX * dt) + (1 - alpha) * pitch; // Correcting with pitch
+    angle_y = alpha * (angle_y + gyroY * dt) + (1 - alpha) * roll;  // Correcting with roll
+    Serial.print("Angle X: ");
+    Serial.println(angle_x);
+    Serial.print("Angle z: ");
+    Serial.println(angle_z);
     // Check if pitch is too large or tipping too fast
-    if (abs(angle_x) > ANGLE_X_THRESOLD || abs(angle_y) > ANGLE_Y_THRESHOLD)
+    if (abs(angle_x) > ANGLE_X_THRESHOLD || abs(angle_z) > ANGLE_Z_THRESHOLD)
     {
         return true; // Rocket is tipping over
     }
