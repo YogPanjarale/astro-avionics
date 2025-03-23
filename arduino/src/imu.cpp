@@ -8,6 +8,9 @@ float gyroBiasX = 0, gyroBiasY = 0, gyroBiasZ = 0;
 float velocityY = 0;
 float height = 0;
 unsigned long prevTime = 0;
+IMUReading prevIMUReading = {0, 0, 0, 0, 0, 0, 0};
+unsigned long prevI = 0;
+
 
 // return 1 if setup is successful, 0 otherwise
 int setupIMU(){
@@ -42,7 +45,7 @@ void calibrateIMU(int samples)
         gySum += gyro.gyro.y;
         gzSum += gyro.gyro.z;
 
-        delay(5); // Small delay between readings
+        delay(40); // Small delay between readings
     }
 
     accelBiasX = axSum / samples;
@@ -58,6 +61,7 @@ void calibrateIMU(int samples)
 
 IMUReading readIMU()
 {
+
     sensors_event_t accel, gyro, temp;
     icm.getEvent(&accel, &gyro, &temp);
 
@@ -71,6 +75,8 @@ IMUReading readIMU()
                     180 / PI;
 
     reading.yaw = (gyro.gyro.z - gyroBiasZ); // Only raw value, fusion needed for accurate yaw
+
+    reading.temp = temp.temperature;
 
     return reading;
 }
@@ -109,30 +115,40 @@ float getHeightIMU(){
     return height;
 }
 
-bool isRocketTippingOver()
+bool isRocketTippingOver(IMUReading reading)
 {
-    sensors_event_t accel, gyro, temp;
-    icm.getEvent(&accel, &gyro, &temp);
+   
 
-    float pitch = atan2(-(accel.acceleration.x - accelBiasX),
-                        sqrt(pow(accel.acceleration.y - accelBiasY, 2) + pow(accel.acceleration.z - accelBiasZ, 2))) * 180 / PI;
+    // // 0.3 ohm + 0.3ohm  0.750*0.6 = 0.45V
+    // power consumption = 0.45V * 0.45V / 0.3ohm = 0.675W
+    // float pitch = atan2(-(accel.acceleration.x - accelBiasX),
+    //                     sqrt(pow(accel.acceleration.y - accelBiasY, 2) + pow(accel.acceleration.z - accelBiasZ, 2))) * 180 / PI;
 
-    float gyroX = gyro.gyro.x - gyroBiasX;
-    float accelY = accel.acceleration.y - accelBiasY;
+    // float gyroX = gyro.gyro.x - gyroBiasX;
+    // float accelY = accel.acceleration.y - accelBiasY;
 
+    float pitch = reading.pitch;
+    float roll = reading.roll;
+    float yaw = reading.yaw;
+    float gyroX = reading.accel_x;
+    float accelY = reading.accel_y;
     // Define thresholds
     const float PITCH_THRESHOLD = 45.0;  // Degrees ( from testing)
     const float GYRO_X_THRESHOLD = 1.0;  // Rad/s (adjust based on testing)
     const float ACCEL_Y_DROP_THRESHOLD = 3.0;  // m/s² (low acceleration means freefall)
     Serial.print("Pitch: ");
     Serial.println(pitch);
+    Serial.print("Roll: ");
+    Serial.println(roll);
+    Serial.print("Yaw: ");
+    Serial.println(yaw);
     Serial.print("Gyro X: ");
     Serial.println(gyroX);
     Serial.print("Accel Y: ");
     Serial.println(accelY);
 
     // Check if pitch is too large or tipping too fast
-    if (abs(pitch) > PITCH_THRESHOLD && abs(gyroX) > GYRO_X_THRESHOLD && accelY < ACCEL_Y_DROP_THRESHOLD)
+    if (abs(pitch) > PITCH_THRESHOLD || abs(gyroX) > GYRO_X_THRESHOLD || accelY < ACCEL_Y_DROP_THRESHOLD)
     {
         return true;  // Rocket is tipping over
     }

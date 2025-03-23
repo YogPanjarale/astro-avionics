@@ -147,6 +147,7 @@ struct Data {
   float accel_x;
   float accel_y;
   float accel_z;
+  IMUReading imuReading;
   float vel_bmp;
   float vel_imu;
   uint16_t statusReg;
@@ -161,7 +162,9 @@ String packDATA(Data data){
   for (int i = 15; i >= 0; i--) {
     binaryStatus += String((data.statusReg >> i) & 1);
   }
-  return String(data.time) +',' + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + String(data.accel_x) + "," + String(data.accel_y) + "," + String(data.accel_z) + "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
+  String imuData = String(data.imuReading.accel_x) + "," + String(data.imuReading.accel_y) + "," + String(data.imuReading.accel_z) + "," + String(data.imuReading.roll) + "," + String(data.imuReading.yaw) + "," + String(data.imuReading.pitch) + "," + String(data.imuReading.temp);
+  String s = String(data.time) +',' + String(data.bmpAltitude) + "," + String(data.imuAltitude) + "," + String(data.pressure) + ","  + imuData+ "," + String(data.vel_bmp) + "," + String(data.vel_imu) + "," + binaryStatus;
+  return s;
 }
 
 // checks all ejection charge continuity and updates status
@@ -402,8 +405,8 @@ void loop() {
    
     
     
-    // IMU will take 500 samples to calibrate , each 5ms , total 2.5 seconds
-      calibrateIMU(500); 
+    // IMU will take 50 samples to calibrate , each 40ms , total 2.5 seconds
+      calibrateIMU(50); 
 
     // we also check ejection Charge Continutity
     checkAllEjectionChargeContinuity(true);
@@ -433,7 +436,7 @@ void loop() {
     // send All Serial
     sendAllSerial(packed_data);
     // debug is tipover
-    if (isRocketTippingOver()){
+    if (isRocketTippingOver(data.imuReading)){
       sendAllSerial("TIP OVER DETECTED");
     }
 
@@ -471,7 +474,7 @@ void loop() {
 
     
     bool s1 = (data.vel_bmp < 1) && (IMU_h & status) ; // if it is alive , and the velocity is less than 1 m/s
-    bool s2 = isRocketTippingOver() ;
+    bool s2 = isRocketTippingOver(data.imuReading); ;
     //bool s3 = (data.vel_imu < 1) &&  (BMP_h & status); // if it is alive , and the velocity is less than 1 m/s
     bool s3 = false;
     bool apogee_detected  = false;

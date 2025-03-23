@@ -14,6 +14,7 @@ struct IMUReading {
     double accel_x;
     double accel_y;
     double accel_z;
+    float temp;
 };
 
 // Function prototypes
@@ -22,6 +23,6 @@ void calibrateIMU(int samples = 500);
 IMUReading readIMU();
 float getVelocityIMU();
 float getHeightIMU();
-bool isRocketTippingOver();
+bool isRocketTippingOver(IMUReading reading);
 
 #endif
