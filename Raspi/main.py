@@ -28,7 +28,6 @@ FLIGHT_LOG = os.path.join(log_dir, time.strftime("flight_%H%M%S.log"))
 BMP_LOG = os.path.join(log_dir, time.strftime("bmp_%H%M%S.log"))
 TIMEOUT = 20
 SERIAL_PORT = '/dev/ttyS0'
-HIGH_RES_VEL = 30  # Ask garg
 BAUD_RATE = 115200
 DROGUE_PIN = 27
 MAIN_PIN = 17
@@ -56,6 +55,7 @@ vel_buffer = []
 current_alt = 0.0
 height = 0.0
 velocity = 0.0
+startup_time = time.monotonic()
 last_packet_time = time.monotonic()
 previous_alt = bmp.altitude
 previous_time = time.monotonic()
@@ -108,6 +108,13 @@ async def stop_recording():
     else:
         await flight_log("ERROR: stop_recording.sh not found!")
 
+async def shutdown_recording():
+    while True:
+        if time.monotonic() - startup_time > 2400:
+            await stop_recording()
+            return
+        await asyncio.sleep(20)
+
 async def deploy_drogue():
     GPIO.output(DROGUE_PIN, GPIO.HIGH)
     await asyncio.sleep(2)
@@ -148,7 +155,6 @@ async def check_failure():
     while True:
         if time.monotonic() - last_packet_time > TIMEOUT:
             await flight_log("ERROR: Arduino timed out! Switching to failure mode.")
-            await stop_recording()
             arduino_status = False
             return
         await asyncio.sleep(1)  # Check every second
@@ -212,6 +218,7 @@ async def landing_mode():
 async def cleanup(aios):
     global vel_logging
     vel_logging = False
+    stop_recording()
     GPIO.output(STATUS, GPIO.LOW)
     GPIO.output(TEL, GPIO.LOW)
     GPIO.cleanup()
@@ -224,7 +231,7 @@ async def main():
     GPIO.output(TEL, GPIO.HIGH)
     await start_recording()
     aios = aioserial.AioSerial(port=SERIAL_PORT, baudrate=BAUD_RATE, timeout=1)
-    asyncio.create_task(update_vel())
+    asyncio.gather(update_vel(), shutdown_recording())
     await asyncio.gather(read_serial(aios), check_failure()) # make sure this function returns if arduino_status is false
 
     # Failure mode
