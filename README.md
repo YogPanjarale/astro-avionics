@@ -1,6 +1,6 @@
 # Astro Avionics - Flight Computer
 
-Flight computer system for Astro Club BITS Pilani's rocket missions. This system provides autonomous flight control, telemetry, and recovery capabilities.
+Flight computer system for rocket missions. This system provides autonomous flight control, telemetry, and recovery capabilities.
 
 ## Overview
 
@@ -38,6 +38,8 @@ astro-avionics/
 │   ├── start_recording.sh # Camera recording start script
 │   └── stop_recording.sh  # Camera recording stop script
 ├── ComponentTests/       # Individual component test sketches
+├── LICENSE               # License file (MIT with attribution requirement)
+├── plan.md               # Development plan, state variables, and technical details
 ├── state_table.md        # Flight state machine documentation
 └── Notes.md              # Hardware connection details
 ```
@@ -115,9 +117,11 @@ The flight computer operates through the following states:
 7. **PARACHUTE**: Deploying main parachute when safe velocity/altitude reached
 8. **RECOVERY**: Post-landing mode, GPS tracking, buzzer activation for recovery
 
-For detailed state machine documentation, see `state_table.md`.
+For detailed state machine documentation, see `state_table.md`. For implementation details on state variables and status register usage, see [`plan.md`](plan.md#flight-regimes-state-machine-implementation).
 
 ## Setup Instructions
+
+> **For detailed setup instructions, state variable usage, and technical implementation details, see [`plan.md`](plan.md).**
 
 ### Arduino Setup
 
@@ -133,6 +137,8 @@ For detailed state machine documentation, see `state_table.md`.
    - Click the build icon (✓) to compile
    - Connect Arduino Nano ESP32 via USB
    - Click the upload icon (→) to flash the firmware
+
+See [`plan.md`](plan.md#how-to-run) for detailed step-by-step instructions with shortcuts and troubleshooting.
 
 ### Raspberry Pi Setup
 
@@ -154,6 +160,8 @@ For detailed state machine documentation, see `state_table.md`.
    cd Raspi
    python3 main.py
    ```
+
+See [`plan.md`](plan.md#how-to-run) for detailed Raspberry Pi setup instructions.
 
 ## Usage
 
@@ -219,11 +227,31 @@ The E32 LoRa module transmits flight data in real-time. Data format includes:
 
 ## Documentation
 
-- `plan.md`: Development plan, state variable usage, and technical implementation details
+- **[`plan.md`](plan.md)**: Comprehensive development plan, state variable usage, status register documentation, and detailed setup instructions. **Start here for technical implementation details.**
 - `state_table.md`: Detailed flight state machine and mission requirements
 - `Notes.md`: Hardware connection details and technical notes
 - `ComponentTests/`: Individual component test sketches for debugging
 
+### Quick Links
+
+- **New to the project?** Start with this README for overview and setup
+- **Need technical details?** See [`plan.md`](plan.md) for state variables, status register, and code structure
+- **Understanding flight logic?** Check `state_table.md` for state machine details
+- **Hardware connections?** Refer to `Notes.md` for pin assignments
+
 ## License
 
-This project is developed for Astro Club BITS Pilani.
+This project is licensed under the MIT License with Attribution Requirement.
+
+**Copyright (c) 2024**
+
+### Attribution Requirement
+
+If you use, modify, or distribute this software, you **must** include proper attribution to the original authors:
+
+- In documentation/README: "This project uses code from Astro Avionics Flight Computer"
+- In publications/presentations: "Based on Astro Avionics Flight Computer"
+- In source code: Include the original copyright notice in file headers
+
+See [`LICENSE`](LICENSE) for the full license text and terms.
+
