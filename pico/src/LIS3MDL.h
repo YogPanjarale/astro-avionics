@@ -4,20 +4,21 @@
 
 class LIS3MDL {
 public:
-  // Constructor with I2C bus
   LIS3MDL(TwoWire& wire, uint8_t addr = 0x1E);
 
   bool begin();
+  void update();   // NEW
 
-  // Magnetometer (uT)
   float getMagX();
   float getMagY();
   float getMagZ();
 
-  // Temperature (°C)
   float getTemperature();
 
 private:
   TwoWire* _wire;
   uint8_t  _addr;
+
+  float mx = 0, my = 0, mz = 0;
+  float temp = 0;
 };

@@ -4,10 +4,10 @@
 
 class BMP {
 public:
-  // Constructor with I2C bus
   BMP(TwoWire& wire, uint8_t addr = 0x77);
 
   bool begin();
+  void update();   // NEW
 
   void setSeaLevelPressure(float p);
 
@@ -21,6 +21,9 @@ private:
   uint8_t  _addr;
 
   float seaLevelPressure = 1013.25;
+
+  float temperature = 0;
+  float pressure = 1013.25;
 
   float lastAltitude = 0;
   unsigned long lastTime = 0;
