@@ -7,7 +7,7 @@ public:
   ICM20649(TwoWire& wire, uint8_t addr = 0x68);
 
   bool begin();
-  void update();   // NEW
+  void read();  
 
   float getAccelX();
   float getAccelY();

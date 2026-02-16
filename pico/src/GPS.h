@@ -3,11 +3,11 @@
 
 class GPS {
 public:
-  GPS(Stream& serial);
+  GPS(SerialUART& serial,int GPS_TX ,int GPS_RX);
 
   bool begin(uint32_t baud = 9600);
 
-  void update();   // call often
+  void read();   // call often
 
   // Position
   float getLatitude();
@@ -26,7 +26,10 @@ public:
   bool hasFix();
 
 private:
-  Stream* _serial;
+  SerialUART* _serial;
+
+  int gpsTxPin;
+  int gpsRxPin;
 
   // cached data
   float latitude = 0;

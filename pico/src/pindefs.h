@@ -2,10 +2,12 @@
 #define PINDEF
 
 // I2C connection for I2C rail B  MCU and sensors
+// I2C1
 #define SDA_B 20
 #define SCL_B 21
 
 // I2C connection for I2C rail A  MCU and sensors
+// I2C0
 #define SDA_A 10
 #define SCL_A 11
 

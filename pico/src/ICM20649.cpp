@@ -9,7 +9,7 @@ bool ICM20649::begin() {
   return true;
 }
 
-void ICM20649::update() {
+void ICM20649::read() {
   // Later: read sensor registers
   ax = ay = 0.0;
   az = 9.81;   // pretend gravity

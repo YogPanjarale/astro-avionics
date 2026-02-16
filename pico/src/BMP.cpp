@@ -12,7 +12,7 @@ bool BMP::begin() {
 }
 
 // Called periodically by task
-void BMP::update() {
+void BMP::read() {
   // Later: read real sensor
   temperature = 25.0;     // dummy
   pressure = 1013.25;     // dummy

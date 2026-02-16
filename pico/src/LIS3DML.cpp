@@ -9,7 +9,7 @@ bool LIS3MDL::begin() {
   return true;
 }
 
-void LIS3MDL::update() {
+void LIS3MDL::read() {
   // Later: read sensor
   mx = my = 0.0;
   mz = 50.0;   // fake earth field

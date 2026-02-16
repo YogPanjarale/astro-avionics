@@ -7,7 +7,7 @@ public:
   LIS3MDL(TwoWire& wire, uint8_t addr = 0x1E);
 
   bool begin();
-  void update();   // NEW
+  void read(); 
 
   float getMagX();
   float getMagY();

@@ -4,19 +4,24 @@
 
 // ----------------------
 
-GPS::GPS(Stream& serial) {
+GPS::GPS(SerialUART& serial,int GPS_TX ,int GPS_RX) {
   _serial = &serial;
+  gpsTxPin = GPS_TX;
+  gpsRxPin = GPS_RX;
 }
 
 // ----------------------
 
 bool GPS::begin(uint32_t baud) {
+  _serial->setTX(gpsTxPin);
+  _serial->setRX(gpsRxPin);
+  _serial->begin(baud);
   return true;
 }
 
 // ----------------------
 
-void GPS::update() {
+void GPS::read() {
   while (_serial->available()) {
     char c = _serial->read();
 
