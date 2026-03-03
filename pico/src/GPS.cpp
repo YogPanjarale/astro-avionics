@@ -13,8 +13,6 @@ GPS::GPS(SerialUART& serial,int GPS_TX ,int GPS_RX) {
 // ----------------------
 
 bool GPS::begin(uint32_t baud) {
-  _serial->setTX(gpsTxPin);
-  _serial->setRX(gpsRxPin);
   _serial->begin(baud);
   return true;
 }
