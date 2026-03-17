@@ -6,7 +6,7 @@
   public:
     BMP(TwoWire& wire, uint8_t addr = 0x77);
 
-    bool begin();
+    bool begin();// begin should have only config 
     void read();  // call often
 
     void setSeaLevelPressure(float p);
