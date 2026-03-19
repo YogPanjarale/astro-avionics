@@ -1,6 +1,7 @@
 #include "imu_lib.h"
 
 #define SAMPLES 2000
+#define DELAY 5 // 200hz polling
 
 bool IMU::begin(TwoWire *bus){
     if (!icm.begin_I2C(0x68, bus))
@@ -24,7 +25,6 @@ bool IMU::begin(TwoWire *bus){
 void IMU::calibrate(){
     sensors_event_t accel;
     sensors_event_t gyro;
-    sensors_event_t temp;
 
     float sum_gx = 0, sum_gy = 0, sum_gz = 0;
     float sum_ax = 0, sum_ay = 0, sum_az = 0;
@@ -34,7 +34,7 @@ void IMU::calibrate(){
     for (uint16_t i = 0; i < SAMPLES; i++)
     {
 
-        icm.getEvent(&accel, &gyro, &temp);
+        icm.getEvent(&accel, &gyro, NULL);
 
         sum_gx += gyro.gyro.x;
         sum_gy += gyro.gyro.y;
@@ -44,7 +44,7 @@ void IMU::calibrate(){
         sum_ay += accel.acceleration.y;
         sum_az += accel.acceleration.z;
 
-        delay(5); // running @200Hz
+        delay(DELAY); // running @200Hz
     }
 
     // -------- Gyro bias --------
@@ -67,5 +67,37 @@ void IMU::calibrate(){
     accel_bias.z = avg_az - 9.81f;
 }
 
+void IMU::getAccelGyroTemp(Vec3 *a, Vec3 *g, float* t){
+    sensors_event_t accel;
+    sensors_event_t gyro;
+    sensors_event_t temp;
+
+    icm.getEvent(&accel, &gyro, &temp);
+    
+    a->x = accel.acceleration.x - accel_bias.x;
+    a->z = accel.acceleration.z - accel_bias.z;
+    a->y = accel.acceleration.y - accel_bias.y;
+
+    g->x = gyro.gyro.x - gyro_bias.x;
+    g->y = gyro.gyro.y - gyro_bias.y;
+    g->z = gyro.gyro.z - gyro_bias.z;
+
+    *t = temp.temperature;
+}
+
+void IMU::getAccelGyro(Vec3 *a, Vec3 *g){  // Store these!!
+    sensors_event_t accel;
+    sensors_event_t gyro;
+
+    icm.getEvent(&accel, &gyro, NULL);
+    
+    a->x = accel.acceleration.x - accel_bias.x;
+    a->z = accel.acceleration.z - accel_bias.z;
+    a->y = accel.acceleration.y - accel_bias.y;
+
+    g->x = gyro.gyro.x - gyro_bias.x;
+    g->y = gyro.gyro.y - gyro_bias.y;
+    g->z = gyro.gyro.z - gyro_bias.z;
+}
 // need to get gyro orientation to make local coordinates into world
 // see arduino std madgwick quarternion library

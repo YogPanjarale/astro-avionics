@@ -9,7 +9,8 @@ class IMU{
     public:
     bool begin(TwoWire* bus);
     void calibrate();
-
+    void getAccelGyroTemp(Vec3 *accel, Vec3 *gyro, float* t);
+    void getAccelGyro(Vec3 *a, Vec3 *g);
 
     struct Vec3{
         float x;
