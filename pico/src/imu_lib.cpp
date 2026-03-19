@@ -58,12 +58,13 @@ void IMU::calibrate(){
 
     // Rocket upright assumption:
     // X ≈ 0
-    // Y ≈ 0
-    // Z ≈ +9.81 m/s^2
+    // Y ≈ +9.81 m/s^2
+    // Z ≈ 0
+    // +Y points to sky at launchpad
 
     accel_bias.x = avg_ax;
-    accel_bias.y = avg_ay;
-    accel_bias.z = avg_az - 9.81f;
+    accel_bias.y = avg_ay - 9.81f;
+    accel_bias.z = avg_az;
 }
 
 void IMU::getAccelGyroTemp(Vec3 *a, Vec3 *g, float* t){
