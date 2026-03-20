@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#include <LoRa.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -26,31 +27,82 @@
 #define SPI_MISO 4
 
 #define SD_CS    26
-#define LORA_CS  5
+
+#define SPI_CS_LORA 5
+#define LORA_RESET 6
+#define LORA_DIO0  7
 
 #define GPS_TX 8
 #define GPS_RX 9
 
+#define LORA_FREQ 433E6
+
 // --------------------
-// SENSOR ADDR
+// FLIGHT STATE
+// --------------------
+enum class FlightState {
+  START,
+  ASCENT,
+  APOGEE,
+  DESCENT,
+  LANDED
+};
+
+// --------------------
+// STRUCTS
+// --------------------
+struct vector3 {
+  float x;
+  float y;
+  float z;
+};
+
+struct SharedData {
+
+  uint32_t timestamp;
+  uint32_t dt;
+
+  float BMPA_Temperature;
+  float BMPA_Pressure;
+  float BMPA_Altitude;
+  float BMPA_Velocity;
+
+  float BMPB_Temperature;
+  float BMPB_Pressure;
+  float BMPB_Altitude;
+  float BMPB_Velocity;
+
+  vector3 ICM_Accel;
+  float ICM_Velocity_Z;
+  vector3 ICM_Gyro;
+  vector3 ICM_Theta;
+  float ICM_Temperature;
+
+  vector3 LIS_Mag;
+  float LIS_Temperature;
+
+  float GPS_Latitude;
+  float GPS_Longitude;
+
+  FlightState current_state;
+};
+
+// --------------------
+// OBJECTS
 // --------------------
 #define MAG_ADDR 0x1E
 #define ICM_ADDR 0x68
 #define BMP_ADDR 0x77
 
-// --------------------
-// OBJECTS
-// --------------------
 LIS3MDL lis(Wire1, MAG_ADDR);
 ICM20649 icm(Wire1, ICM_ADDR);
 BMP bmp(Wire1, BMP_ADDR);
-
 GPS gps(Serial2, GPS_TX, GPS_RX);
 
 File logFile;
 
 // --------------------
-// MUTEX + QUEUE
+// RTOS
 // --------------------
 SemaphoreHandle_t i2cMutex;
 SemaphoreHandle_t dataMutex;
@@ -58,37 +110,8 @@ SemaphoreHandle_t spiMutex;
 
 QueueHandle_t logQueue;
 
-// --------------------
-// DATA STRUCT
-// --------------------
-typedef struct {
-  uint32_t time;
+SharedData gData;
 
-  float ax, ay, az;
-  float gx, gy, gz;
-
-  float mx, my, mz;
-
-  float altitude;
-  float velocity;
-  float pressure;
-  float temp_bmp;
-  float temp_imu;
-
-  float lat;
-  float lon;
-  float gps_alt;
-  bool gps_fix;
-
-  uint32_t dt;
-  
-
-} SensorData;
-
-SensorData gData;
-
-// --------------------
-// AUTO FILE NAME
 // --------------------
 String getNextFilename() {
   for (int i = 1; i < 1000; i++) {
@@ -99,7 +122,12 @@ String getNextFilename() {
 }
 
 // --------------------
-// IMU TASK
+FlightState randomState() {
+  return (FlightState)random(0, 5);
+}
+
+// --------------------
+// TASKS
 // --------------------
 void icmTask(void* param) {
   for (;;) {
@@ -110,23 +138,17 @@ void icmTask(void* param) {
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
 
-    gData.ax = icm.accelX();
-    gData.ay = icm.accelY();
-    gData.az = icm.accelZ();
-
-    gData.gx = icm.gyroX();
-    gData.gy = icm.gyroY();
-    gData.gz = icm.gyroZ();
+    gData.ICM_Accel = {icm.accelX(), icm.accelY(), icm.accelZ()};
+    gData.ICM_Gyro  = {icm.gyroX(), icm.gyroY(), icm.gyroZ()};
+    gData.ICM_Temperature = icm.temperature();
+    gData.ICM_Velocity_Z = gData.ICM_Accel.z * 0.02f;
 
     xSemaphoreGive(dataMutex);
 
-    vTaskDelay(pdMS_TO_TICKS(20)); // 50 Hz
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
-// --------------------
-// MAG TASK
-// --------------------
 void magTask(void* param) {
   for (;;) {
 
@@ -135,20 +157,13 @@ void magTask(void* param) {
     xSemaphoreGive(i2cMutex);
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
-
-    gData.mx = lis.getMagX();
-    gData.my = lis.getMagY();
-    gData.mz = lis.getMagZ();
-
+    gData.LIS_Mag = {lis.getMagX(), lis.getMagY(), lis.getMagZ()};
     xSemaphoreGive(dataMutex);
 
-    vTaskDelay(pdMS_TO_TICKS(50)); // 20 Hz
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
-// --------------------
-// BMP TASK
-// --------------------
 void bmpTask(void* param) {
   for (;;) {
 
@@ -158,13 +173,14 @@ void bmpTask(void* param) {
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
 
-    gData.altitude = bmp.getRelativeAltitude();
-    gData.velocity = bmp.getVelocity();
-    gData.pressure = bmp.getPressure();
+    gData.BMPA_Altitude = bmp.getRelativeAltitude();
+    gData.BMPA_Velocity = bmp.getVelocity();
+    gData.BMPA_Pressure = bmp.getPressure();
+    gData.BMPA_Temperature = bmp.getTemperature();
 
     xSemaphoreGive(dataMutex);
 
-    vTaskDelay(pdMS_TO_TICKS(20)); // 50 Hz
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
@@ -174,131 +190,144 @@ void gpsTask(void* param) {
 
   for (;;) {
 
-    // Warmup 15 sec
     if (millis() - startTime < 15000) {
       vTaskDelay(pdMS_TO_TICKS(100));
       continue;
     }
 
-    // Read GPS
     gps.read();
 
-    // Update shared struct
     xSemaphoreTake(dataMutex, portMAX_DELAY);
 
     if (gps.hasFix()) {
-      gData.lat = gps.getLatitude();
-      gData.lon = gps.getLongitude();
-      gData.gps_alt = gps.getAltitude();
-      gData.gps_fix = true;
-    } else {
-      gData.lat = 0;
-      gData.lon = 0;
-      gData.gps_alt = 0;
-      gData.gps_fix = false;
+      gData.GPS_Latitude = gps.getLatitude();
+      gData.GPS_Longitude = gps.getLongitude();
     }
 
     xSemaphoreGive(dataMutex);
 
-    vTaskDelay(pdMS_TO_TICKS(100)); // ~10 Hz
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
 // --------------------
-// SAMPLER TASK
+// SAMPLER (timestamp + dt)
 // --------------------
 void samplerTask(void* param) {
-  SensorData d;
+
+  SharedData d;
+  static uint32_t lastMicros = 0;
 
   for (;;) {
 
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    d = gData;
-    d.time = millis();
-    static uint32_t lastTime = 0;
-    uint32_t now = micros();
+    uint32_t nowMicros = micros();
+    uint32_t nowMillis = millis();
 
-    d.dt = now - lastTime;
-    lastTime = now;
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+
+    d = gData;
+    d.timestamp = nowMillis;
+    d.dt = nowMicros - lastMicros;
+    d.current_state = randomState();
+
     xSemaphoreGive(dataMutex);
 
-    // Safe queue push
-    if (xQueueSend(logQueue, &d, 0) != pdTRUE) {
-      // queue full → drop
-    }
+    lastMicros = nowMicros;
 
-    vTaskDelay(pdMS_TO_TICKS(50)); // 20 Hz logging
+    xQueueSend(logQueue, &d, 0);
+
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
 // --------------------
-// LOGGER TASK
+// LOGGER
 // --------------------
 void loggerTask(void* param) {
-  SensorData d;
-  int flushCounter = 0;
+
+  SharedData d;
 
   for (;;) {
 
     if (xQueueReceive(logQueue, &d, pdMS_TO_TICKS(100)) == pdTRUE) {
 
-      // SERIAL
-      char buffer[192];
+      char buffer[300];
 
       snprintf(buffer, sizeof(buffer),
-        "%lu,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.6f,%.6f,%.2f,%d",
-        d.time,
-        d.ax, d.ay, d.az,
-        d.gx, d.gy, d.gz,
-        d.mx, d.my, d.mz,
-        d.altitude,
-        d.velocity,
-        d.pressure,
-        d.lat,
-        d.lon,
-        d.gps_alt,
-        d.gps_fix
+        "%lu,%lu,"
+        "%.2f,%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,"
+        "%.6f,%.6f,%d",
+        d.timestamp,
+        d.dt,
+        d.BMPA_Temperature,
+        d.BMPA_Pressure,
+        d.BMPA_Altitude,
+        d.BMPA_Velocity,
+        d.ICM_Accel.x,
+        d.ICM_Accel.y,
+        d.ICM_Accel.z,
+        d.ICM_Gyro.x,
+        d.ICM_Gyro.y,
+        d.ICM_Gyro.z,
+        d.LIS_Mag.x,
+        d.LIS_Mag.y,
+        d.LIS_Mag.z,
+        d.GPS_Latitude,
+        d.GPS_Longitude,
+        (int)d.current_state
       );
 
       Serial.println(buffer);
-      // SD
+
       xSemaphoreTake(spiMutex, portMAX_DELAY);
+      digitalWrite(SPI_CS_LORA, HIGH);
 
-      digitalWrite(LORA_CS, HIGH);
-
-      char buffersd[192];
-
-      int len = snprintf(buffersd, sizeof(buffer),
-        "%lu,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.6f,%.6f,%.2f,%d\n",
-        d.time,
-        d.ax, d.ay, d.az,
-        d.gx, d.gy, d.gz,
-        d.mx, d.my, d.mz,
-        d.altitude,
-        d.velocity,
-        d.pressure,
-        d.lat,
-        d.lon,
-        d.gps_alt,
-        d.gps_fix
-      );
-
-      if (logFile) {
-        logFile.write((uint8_t*)buffersd, len);
-      }
+      if (logFile) logFile.println(buffer);
 
       xSemaphoreGive(spiMutex);
-
-      flushCounter++;
-      if (flushCounter >= 10) {
-        xSemaphoreTake(spiMutex, portMAX_DELAY);
-        if (logFile) logFile.flush();
-        xSemaphoreGive(spiMutex);
-        flushCounter = 0;
-      }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));  // 🔥 VERY IMPORTANT
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+// --------------------
+// LORA
+// --------------------
+void loraTask(void* param) {
+
+  SharedData d;
+
+  for (;;) {
+
+    if (xQueuePeek(logQueue, &d, pdMS_TO_TICKS(200)) == pdTRUE) {
+
+      char payload[128];
+
+      snprintf(payload, sizeof(payload),
+        "%lu,%lu,%.2f,%.2f,%.6f,%.6f",
+        d.timestamp,
+        d.dt,
+        d.BMPA_Altitude,
+        d.ICM_Velocity_Z,
+        d.GPS_Latitude,
+        d.GPS_Longitude
+      );
+
+      xSemaphoreTake(spiMutex, portMAX_DELAY);
+      digitalWrite(SD_CS, HIGH);
+
+      LoRa.beginPacket();
+      LoRa.print(payload);
+      LoRa.endPacket();
+
+      xSemaphoreGive(spiMutex);
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
@@ -309,78 +338,71 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
-  Serial.println("=== STABLE LOGGER START ===");
-
-  // I2C
   Wire1.setSDA(SDA_PIN);
   Wire1.setSCL(SCL_PIN);
   Wire1.begin();
   Wire1.setClock(400000);
 
-  // SPI
   pinMode(SD_CS, OUTPUT);
-  digitalWrite(SD_CS, HIGH);
+  pinMode(SPI_CS_LORA, OUTPUT);
 
-  pinMode(LORA_CS, OUTPUT);
-  digitalWrite(LORA_CS, HIGH);
+  digitalWrite(SD_CS, HIGH);
+  digitalWrite(SPI_CS_LORA, HIGH);
 
   SPI.setSCK(SPI_SCK);
   SPI.setTX(SPI_MOSI);
   SPI.setRX(SPI_MISO);
   SPI.begin();
 
-  
-  // Mutex
   i2cMutex = xSemaphoreCreateMutex();
   dataMutex = xSemaphoreCreateMutex();
   spiMutex  = xSemaphoreCreateMutex();
-  
-  // SMALL QUEUE (important)
-  logQueue = xQueueCreate(20, sizeof(SensorData));
 
-  // Sensors
-  Serial.println("Init LIS...");
+  logQueue = xQueueCreate(20, sizeof(SharedData));
+
   lis.begin();
-  Serial.println("Init ICM...");
   icm.begin();
-  Serial.println("Init BMP...");
   bmp.begin();
-  Serial.println("Sensors OK");
+
   Serial2.setTX(GPS_TX);
   Serial2.setRX(GPS_RX);
-  Serial.println("GPS start");
-
   Serial2.begin(9600);
-  if (Serial2.available()) {
-    Serial.println("GPS DATA FLOWING");
-  }
-  gps.begin(9600);  // now only starts logic, not hardware
-  Serial.println("GPS OK");
+  gps.begin(9600);
 
-  // SD
+  // SD + HEADER ✅
   if (SD.begin(SD_CS)) {
 
-    String filename = getNextFilename();
-    Serial.println("Logging to: " + filename);
-
-    logFile = SD.open(filename, FILE_WRITE);
+    logFile = SD.open(getNextFilename(), FILE_WRITE);
 
     if (logFile) {
-      logFile.println("time,ax,ay,az,gx,gy,gz,mx,my,mz,alt,vel,pressure,lat,lon,gps_alt,gps_fix");
+      logFile.println("time,dt,bmp_temp,bmp_press,bmp_alt,bmp_vel,ax,ay,az,gx,gy,gz,mx,my,mz,lat,lon,state");
       logFile.flush();
     }
-  } else {
-    Serial.println("SD FAIL");
   }
 
-  // Tasks (SAFE STACK SIZES)
+  // LORA INIT
+  xSemaphoreTake(spiMutex, portMAX_DELAY);
+
+  LoRa.setPins(SPI_CS_LORA, LORA_RESET, LORA_DIO0);
+
+  if (!LoRa.begin(LORA_FREQ)) {
+    while (1);
+  }
+
+  LoRa.setSpreadingFactor(7);
+  LoRa.setTxPower(17);
+  LoRa.enableCrc();
+
+  xSemaphoreGive(spiMutex);
+
+  // TASKS
   xTaskCreate(icmTask, "ICM", 1024, NULL, 2, NULL);
   xTaskCreate(bmpTask, "BMP", 1024, NULL, 1, NULL);
   xTaskCreate(magTask, "MAG", 1024, NULL, 1, NULL);
   xTaskCreate(samplerTask, "SAMPLE", 1024, NULL, 1, NULL);
-  xTaskCreate(loggerTask, "LOGGER", 2048, NULL, 0, NULL);
+  xTaskCreate(loggerTask, "LOGGER", 2048, NULL, 1, NULL);
   xTaskCreate(gpsTask, "GPS", 2048, NULL, 1, NULL);
+  xTaskCreate(loraTask, "LORA", 2048, NULL, 1, NULL);
 }
 
-// --------------------
 void loop() {}
