@@ -9,6 +9,7 @@ Example implementation in main.cpp
 Wire.setSDA(SDA0); // Wire1.setSDA(SDA1) for i2c_1
 Wire.setSCL(SCL0);
 Wire.begin();
+Wire.setClock(400000); // check if system is stable in 400Khz, Available modes: 100Khz, 400Khz, 1000Khz
 
 // Create object (Use objects for different i2c line bmps)
 BMP bmp1;
