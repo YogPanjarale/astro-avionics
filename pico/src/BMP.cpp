@@ -11,11 +11,18 @@ bool BMP::begin() {
         return false;
     }
 
-    // Configure sensor (same tuning as earlier implementation)
-    // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_1);
+    // Configure sensor (Taken from drone example in Bosch BMP390 datasheet)
+    // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X); // Allowed values 2,4,8,16. We dont want to oversample temp 
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_8X);
+    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_1); // 0 - 127 set as 1 to reduce lag
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);  // 50Hz update rate
+
+    // time to measure = time for pressure + time for temp + filtering
+    // each sample takes ~ 2 - 2.5ms
+
+    // Adafruit says initial reading is not accurate - discarding this data
+    if (!bmp.performReading()) return false;
+    delay(30);
 
     // Take initial reading to establish baseline
     if (!bmp.performReading()) return false;
@@ -41,7 +48,7 @@ void BMP::read() {
     // Limit update rate to sensor ODR (~50Hz)
     // Calling faster than this just adds noise
     if (dt_ms < 20) return;
-
+    
     if (!bmp.performReading()) return;
 
     float dt = dt_ms / 1000.0f;
@@ -54,10 +61,13 @@ void BMP::read() {
     altitude = bmp.readAltitude(seaLevelPressure);
 
     // Compute vertical velocity (m/s)
-    float newVelocity = (altitude - lastAltitude) / dt;
+    // float newVelocity = (altitude - lastAltitude) / dt;  
 
     // Simple low-pass filter to reduce noise (important for flight use)
-    velocity = 0.7f * velocity + 0.3f * newVelocity;
+    // velocity = 0.7f * velocity + 0.3f * newVelocity; // Dont do this change IIR coeff for lowpass filtering
+
+    // Compute vertical velocity (m/s)
+    velocity = (altitude - lastAltitude) / dt;
 
     lastAltitude = altitude;
     lastTime = now;
