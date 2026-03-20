@@ -1,237 +1,136 @@
 #define __FREERTOS 1
 
 #include <Arduino.h>
+#include <Wire.h>
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
 
-// our libs
-#include <BMP.h>
-#include <GPS.h>
-#include <ICM20649.h>
-#include <LIS3MDL.h>
-#include <pindefs.h>
+#include "LIS3MDL.h"
+#include "ICM20649.h"
 
-// defining sensors 
-BMP bmpA(Wire, 0x77);
-BMP bmpB(Wire1, 0x77);
-ICM20649 icm(Wire);
-LIS3MDL lis(Wire);
-GPS gps(Serial1, GPS_TX, GPS_RX);
+#define SDA_PIN 10
+#define SCL_PIN 11
 
-// --------------------
-// Shared resource
-// --------------------
-struct vector3 {
-  float x;
-  float y;
-  float z;
-};
-struct SharedData
-{
-  float BMPA_Temperature;
-  float BMPA_Pressure;
-  float BMPA_Altitude;
-  float BMPA_Velocity;
-  float BMPB_Temperature;
-  float BMPB_Pressure;
-  float BMPB_Altitude;
-  float BMPB_Velocity;
-  vector3 ICM_Accel;
-  vector3 ICM_Gyro;
-  float ICM_Temperature;
-  vector3 LIS_Mag;
-  float LIS_Temperature;
-  float GPS_Latitude;
-  float GPS_Longitude;
-};
-SemaphoreHandle_t dataMutex;
-SharedData sharedData;
+#define MAG_ADDR 0x1E
+#define ICM_ADDR 0x68
 
-volatile int globalCounter = 0;
-SemaphoreHandle_t counterMutex;
+// Sensors on SAME bus (Wire1)
+LIS3MDL lis(Wire1, MAG_ADDR);
+ICM20649 icm(Wire1, ICM_ADDR);
+
+// Mutex for I2C
+SemaphoreHandle_t i2cMutex;
 
 // --------------------
-// Task prototypes
+// Task: Magnetometer
 // --------------------
-void task1(void* param);
-void task2(void* param);
-void task3(void* param);
-void task4(void* param);
-void task5(void* param);
+void magTask(void* param) {
+  for (;;) {
 
+    xSemaphoreTake(i2cMutex, portMAX_DELAY);
+    lis.read();
+    xSemaphoreGive(i2cMutex);
+
+    Serial.print("[MAG] ");
+    Serial.print(lis.getMagX(), 3);
+    Serial.print(", ");
+    Serial.print(lis.getMagY(), 3);
+    Serial.print(", ");
+    Serial.print(lis.getMagZ(), 3);
+
+    Serial.print(" | T: ");
+    Serial.println(lis.getTemperature(), 2);
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
+
+// --------------------
+// Task: IMU
+// --------------------
+void icmTask(void* param) {
+  for (;;) {
+
+    xSemaphoreTake(i2cMutex, portMAX_DELAY);
+    icm.read();
+    xSemaphoreGive(i2cMutex);
+
+    Serial.print("[ICM] Accel: ");
+    Serial.print(icm.accelX(), 2);
+    Serial.print(", ");
+    Serial.print(icm.accelY(), 2);
+    Serial.print(", ");
+    Serial.print(icm.accelZ(), 2);
+
+    Serial.print(" | Gyro: ");
+    Serial.print(icm.gyroX(), 2);
+    Serial.print(", ");
+    Serial.print(icm.gyroY(), 2);
+    Serial.print(", ");
+    Serial.print(icm.gyroZ(), 2);
+
+    Serial.print(" | Temp: ");
+    Serial.println(icm.temperature(), 2);
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
+
+// --------------------
+// I2C Scanner
+// --------------------
+void scanI2C() {
+  Serial.println("Scanning I2C...");
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire1.beginTransmission(addr);
+    if (Wire1.endTransmission() == 0) {
+      Serial.print("Found device at 0x");
+      Serial.println(addr, HEX);
+    }
+  }
+  Serial.println();
+}
+
+// --------------------
+// Setup
+// --------------------
 void setup() {
   Serial.begin(115200);
-  Wire.setSDA(SDA_A);
-  Wire.setSCL(SCL_A);
-  Wire1.setSDA(SDA_B);
-  Wire1.setSCL(SCL_B);
-  while (!Serial);
+  delay(1000);
 
-  Serial.println("Starting FreeRTOS with shared memory...");
+  Serial.println("=== MAG + ICM TEST ===");
 
-  // Create mutex
-  counterMutex = xSemaphoreCreateMutex();
-  dataMutex = xSemaphoreCreateMutex();
+  // ✅ Correct bus
+  Wire1.setSDA(SDA_PIN);
+  Wire1.setSCL(SCL_PIN);
+  Wire1.begin();
 
-  if (dataMutex == NULL) {
-    Serial.println("Failed to create mutex!");
+  // Mutex
+  i2cMutex = xSemaphoreCreateMutex();
+
+  // Scan
+  scanI2C();
+
+  // Init MAG
+  Serial.println("Init LIS...");
+  if (!lis.begin()) {
+    Serial.println("❌ LIS failed");
     while (1);
   }
+  Serial.println("✅ LIS OK");
 
-  // Create tasks
-  xTaskCreate(task1, "BMPA", 1024, NULL, 1, NULL);
-  xTaskCreate(task2, "BMPB", 1024, NULL, 1, NULL);
-  xTaskCreate(task3, "ICM", 1024, NULL, 1, NULL);
-  xTaskCreate(task4, "LIS", 1024, NULL, 1, NULL);
-  xTaskCreate(task5, "GPS", 1024, NULL, 1, NULL);
-
-  // init senors
-  bmpA.begin();
-  bmpB.begin();
-  icm.begin();
-  lis.begin();
-  gps.begin();
-
-}
-
-void loop() {
-  // Not used
-}
-
-// --------------------
-// Task 1 : BMPA
-// --------------------
-void task1(void* param) {
-  for (;;) {
-    bmpA.read();
-    if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
-      sharedData.BMPA_Temperature = bmpA.getTemperature();
-      sharedData.BMPA_Pressure = bmpA.getPressure();
-      sharedData.BMPA_Altitude = bmpA.getAltitude();
-      sharedData.BMPA_Velocity = bmpA.getVelocity();
-      // inline prinitng
-      Serial.print("BMPA Temp: ");
-      Serial.print(sharedData.BMPA_Temperature);
-      Serial.print(" C, Pressure: ");
-      Serial.print(sharedData.BMPA_Pressure);
-      Serial.print(" hPa, Altitude: ");
-      Serial.print(sharedData.BMPA_Altitude);
-      Serial.print(" m, Velocity: ");
-      Serial.print(sharedData.BMPA_Velocity);
-      xSemaphoreGive(dataMutex);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(1000));
+  // Init ICM
+  Serial.println("Init ICM...");
+  if (!icm.begin()) {
+    Serial.println("❌ ICM failed");
+    while (1);
   }
+  Serial.println("✅ ICM OK\n");
+
+  // Tasks
+  xTaskCreate(magTask, "MAG", 2048, NULL, 1, NULL);
+  xTaskCreate(icmTask, "ICM", 2048, NULL, 1, NULL);
 }
 
-// --------------------
-// Task 2 : BMPB
-// --------------------
-void task2(void* param) {
-  for (;;) {
-    bmpB.read();
-    if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
-      sharedData.BMPB_Temperature = bmpB.getTemperature();
-      sharedData.BMPB_Pressure = bmpB.getPressure();
-      sharedData.BMPB_Altitude = bmpB.getAltitude();
-      sharedData.BMPB_Velocity = bmpB.getVelocity();
-      Serial.print("BMPB Temp: ");
-      Serial.print(sharedData.BMPB_Temperature);
-      Serial.print(" C, Pressure: ");
-      Serial.print(sharedData.BMPB_Pressure);
-      Serial.print(" hPa, Altitude: ");
-      Serial.print(sharedData.BMPB_Altitude);
-      Serial.print(" m, Velocity: ");
-      Serial.print(sharedData.BMPB_Velocity);
-      xSemaphoreGive(dataMutex);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(1500));
-  }
-}
-
-// --------------------
-// Task 3 : ICM20649
-// --------------------
-void task3(void* param) {
-  for (;;) {
-    icm.read();
-    if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
-      sharedData.ICM_Accel.x = icm.getAccelX();
-      sharedData.ICM_Accel.y = icm.getAccelY();
-      sharedData.ICM_Accel.z = icm.getAccelZ();
-      sharedData.ICM_Gyro.x = icm.getGyroX();
-      sharedData.ICM_Gyro.y = icm.getGyroY();
-      sharedData.ICM_Gyro.z = icm.getGyroZ();
-      sharedData.ICM_Temperature = icm.getTemperature();
-      Serial.print("ICM Accel: (");
-      Serial.print(sharedData.ICM_Accel.x);
-      Serial.print(", ");
-      Serial.print(sharedData.ICM_Accel.y);
-      Serial.print(", ");
-      Serial.print(sharedData.ICM_Accel.z);
-      Serial.print(") m/s^2, Gyro: (");
-      Serial.print(sharedData.ICM_Gyro.x);
-      Serial.print(", ");
-      Serial.print(sharedData.ICM_Gyro.y);
-      Serial.print(", ");
-      Serial.print(sharedData.ICM_Gyro.z);
-      Serial.print(") deg/s, Temp: ");
-      Serial.print(sharedData.ICM_Temperature);
-      Serial.println(" C");
-      xSemaphoreGive(dataMutex);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(2000));
-  }
-}
-
-// --------------------
-// Task 4 : LIS3MDL
-// --------------------
-void task4(void* param) {
-  for (;;) {
-    lis.read();
-    if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
-      sharedData.LIS_Mag.x = lis.getMagX();
-      sharedData.LIS_Mag.y = lis.getMagY();
-      sharedData.LIS_Mag.z = lis.getMagZ();
-      sharedData.LIS_Temperature = lis.getTemperature();
-      Serial.print("LIS Mag: (");
-      Serial.print(sharedData.LIS_Mag.x);
-      Serial.print(", ");
-      Serial.print(sharedData.LIS_Mag.y);
-      Serial.print(", ");
-      Serial.print(sharedData.LIS_Mag.z);
-      Serial.print(") uT, Temp: ");
-      Serial.print(sharedData.LIS_Temperature);
-      Serial.println(" C");
-      xSemaphoreGive(dataMutex);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(2500));
-  }
-}
-
-// --------------------
-// Task 5 : GPS
-// --------------------
-void task5(void* param) {
-  for (;;) {
-    gps.read();
-    if (xSemaphoreTake(dataMutex, portMAX_DELAY)) {
-      sharedData.GPS_Latitude = gps.getLatitude();
-      sharedData.GPS_Longitude = gps.getLongitude();
-      Serial.print("GPS Latitude: ");
-      Serial.print(sharedData.GPS_Latitude);
-      Serial.print(" deg, Longitude: ");
-      Serial.print(sharedData.GPS_Longitude);
-      Serial.println(" deg");
-      xSemaphoreGive(dataMutex);
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(3000));
-  }
-}
+void loop() {}

@@ -22,3 +22,6 @@ The I2C rail B contains the following devices:
 Primary function of code is to deploy parachute at right altitude.
 
 The Secondary function for the code is to get readings from all the sensors and log them to the SD card. It also has to send the data to PICO A for redundancy in datalogging and continuity check. The code also has to send the data to lora for transmission.
+
+
+i also want to implement a sd card so can you add a global stack of logs which we keep adding things to and sd card write happens every 10hz

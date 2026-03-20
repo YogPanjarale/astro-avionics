@@ -11,66 +11,64 @@
 
 #define LIS3MDL_ID         0x3D
 
+// --------------------
 LIS3MDL::LIS3MDL(TwoWire& wire, uint8_t addr) {
   _wire = &wire;
   _addr = addr;
 }
 
+// --------------------
 bool LIS3MDL::begin() {
-  _wire->begin();
+  // ❌ DO NOT call _wire->begin() here
 
-  // Check WHO_AM_I
+  // WHO_AM_I check
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_WHO_AM_I);
   if (_wire->endTransmission(false) != 0) return false;
 
   _wire->requestFrom(_addr, (uint8_t)1);
-  if (!_wire->available()) return false;
+  if (_wire->available() != 1) return false;
 
   uint8_t id = _wire->read();
   if (id != LIS3MDL_ID) return false;
 
-  // CTRL_REG1
-  // Temp enable | Ultra-high performance | 80Hz ODR
+  // CTRL_REG1: Temp enable + Ultra-high performance + 80Hz
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_CTRL_REG1);
   _wire->write(0b11110000);
-  _wire->endTransmission();
+  if (_wire->endTransmission() != 0) return false;
 
-  // CTRL_REG2
-  // ±4 gauss full scale
+  // CTRL_REG2: ±4 gauss
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_CTRL_REG2);
   _wire->write(0b00000000);
-  _wire->endTransmission();
+  if (_wire->endTransmission() != 0) return false;
 
-  // CTRL_REG3
-  // Continuous conversion mode
+  // CTRL_REG3: Continuous mode
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_CTRL_REG3);
   _wire->write(0b00000000);
-  _wire->endTransmission();
+  if (_wire->endTransmission() != 0) return false;
 
-  // CTRL_REG4
-  // Ultra-high performance for Z
+  // CTRL_REG4: Ultra-high performance Z
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_CTRL_REG4);
   _wire->write(0b00001100);
-  _wire->endTransmission();
+  if (_wire->endTransmission() != 0) return false;
 
   return true;
 }
 
+// --------------------
 void LIS3MDL::read() {
   uint8_t buffer[6];
 
-  // Read 6 bytes starting from OUT_X_L with auto-increment
+  // Read XYZ
   _wire->beginTransmission(_addr);
-  _wire->write(LIS3MDL_OUT_X_L | 0x80);  // auto-increment
-  _wire->endTransmission(false);
+  _wire->write(LIS3MDL_OUT_X_L | 0x80);
+  if (_wire->endTransmission(false) != 0) return;
 
   _wire->requestFrom(_addr, (uint8_t)6);
-
   if (_wire->available() == 6) {
     for (int i = 0; i < 6; i++) {
       buffer[i] = _wire->read();
@@ -80,29 +78,27 @@ void LIS3MDL::read() {
     int16_t y = (int16_t)(buffer[3] << 8 | buffer[2]);
     int16_t z = (int16_t)(buffer[5] << 8 | buffer[4]);
 
-    // ±4 gauss scale = 6842 LSB/gauss
-    const float sensitivity = 6842.0;
+    const float sensitivity = 6842.0f;
 
     mx = x / sensitivity;
     my = y / sensitivity;
     mz = z / sensitivity;
   }
 
-  // ---- Temperature ----
+  // Read temperature
   _wire->beginTransmission(_addr);
   _wire->write(LIS3MDL_TEMP_OUT_L | 0x80);
-  _wire->endTransmission(false);
+  if (_wire->endTransmission(false) != 0) return;
 
   _wire->requestFrom(_addr, (uint8_t)2);
-
   if (_wire->available() == 2) {
     int16_t t = (int16_t)(_wire->read() | (_wire->read() << 8));
-    temp = 25.0 + (t / 8.0);   // per datasheet
+    temp = 25.0f + (t / 8.0f);
   }
 }
 
+// --------------------
 float LIS3MDL::getMagX() { return mx; }
 float LIS3MDL::getMagY() { return my; }
 float LIS3MDL::getMagZ() { return mz; }
-
 float LIS3MDL::getTemperature() { return temp; }
