@@ -61,12 +61,6 @@ void BMP::read() {
     altitude = bmp.readAltitude(seaLevelPressure);
 
     // Compute vertical velocity (m/s)
-    // float newVelocity = (altitude - lastAltitude) / dt;  
-
-    // Simple low-pass filter to reduce noise (important for flight use)
-    // velocity = 0.7f * velocity + 0.3f * newVelocity; // Dont do this change IIR coeff for lowpass filtering
-
-    // Compute vertical velocity (m/s)
     velocity = (altitude - lastAltitude) / dt;
 
     lastAltitude = altitude;
