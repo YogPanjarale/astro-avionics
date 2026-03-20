@@ -3,27 +3,31 @@
 #include <Wire.h>
 
 class ICM20649 {
+
 public:
-  ICM20649(TwoWire& wire, uint8_t addr = 0x68);
+    ICM20649(TwoWire &wire, uint8_t addr = 0x68);
 
-  bool begin();
-  void read();  
+    bool begin();
+    bool read();
 
-  float getAccelX();
-  float getAccelY();
-  float getAccelZ();
+    float accelX();
+    float accelY();
+    float accelZ();
 
-  float getGyroX();
-  float getGyroY();
-  float getGyroZ();
+    float gyroX();
+    float gyroY();
+    float gyroZ();
 
-  float getTemperature();
+    float temperature();
 
 private:
-  TwoWire* _wire;
-  uint8_t  _addr;
+    TwoWire *_wire;
+    uint8_t _addr;
 
-  float ax = 0, ay = 0, az = 0;
-  float gx = 0, gy = 0, gz = 0;
-  float temp = 0;
+    bool writeReg(uint8_t reg, uint8_t val);
+    bool readBytes(uint8_t reg, uint8_t *buf, uint8_t len);
+
+    float ax, ay, az;
+    float gx, gy, gz;
+    float temp;
 };
