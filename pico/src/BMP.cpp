@@ -12,7 +12,7 @@ bool BMP::begin() {
     }
 
     // Configure sensor (Taken from drone example in Bosch BMP390 datasheet)
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_1X);
+    // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X); // Allowed values 2,4,8,16. We dont want to oversample temp 
     bmp.setPressureOversampling(BMP3_OVERSAMPLING_8X);
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_1); // 0 - 127 set as 1 to reduce lag
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);  // 50Hz update rate
