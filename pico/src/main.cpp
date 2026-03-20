@@ -65,6 +65,7 @@ struct SharedData {
   float BMPA_Temperature;
   float BMPA_Pressure;
   float BMPA_Altitude;
+  float BMPA_RelativeAltitude;
   float BMPA_Velocity;
 
   float BMPB_Temperature;
@@ -173,7 +174,8 @@ void bmpTask(void* param) {
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
 
-    gData.BMPA_Altitude = bmp.getRelativeAltitude();
+    gData.BMPA_Altitude = bmp.getAltitude();
+    gData.BMPA_RelativeAltitude = bmp.getRelativeAltitude();
     gData.BMPA_Velocity = bmp.getVelocity();
     gData.BMPA_Pressure = bmp.getPressure();
     gData.BMPA_Temperature = bmp.getTemperature();
@@ -255,7 +257,7 @@ void loggerTask(void* param) {
 
       snprintf(buffer, sizeof(buffer),
         "%lu,%lu,"
-        "%.2f,%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,%.2f,%.2f,"
         "%.2f,%.2f,%.2f,"
         "%.2f,%.2f,%.2f,"
         "%.2f,%.2f,%.2f,"
@@ -265,6 +267,7 @@ void loggerTask(void* param) {
         d.BMPA_Temperature,
         d.BMPA_Pressure,
         d.BMPA_Altitude,
+        d.BMPA_RelativeAltitude,
         d.BMPA_Velocity,
         d.ICM_Accel.x,
         d.ICM_Accel.y,
@@ -281,6 +284,14 @@ void loggerTask(void* param) {
       );
 
       Serial.println(buffer);
+
+      // only bmp for drbugging 
+      Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f\n",
+                    d.timestamp,
+                    d.BMPA_Temperature,
+                    d.BMPA_Pressure,
+                    d.BMPA_Altitude,
+                    d.BMPA_RelativeAltitude);
 
       xSemaphoreTake(spiMutex, portMAX_DELAY);
       digitalWrite(SPI_CS_LORA, HIGH);
@@ -305,13 +316,14 @@ void loraTask(void* param) {
 
     if (xQueuePeek(logQueue, &d, pdMS_TO_TICKS(200)) == pdTRUE) {
 
-      char payload[128];
+      char payload[160];
 
       snprintf(payload, sizeof(payload),
-        "%lu,%lu,%.2f,%.2f,%.6f,%.6f",
+        "%lu,%lu,%.2f,%.2f,%.2f,%.6f,%.6f",
         d.timestamp,
         d.dt,
         d.BMPA_Altitude,
+        d.BMPA_RelativeAltitude,
         d.ICM_Velocity_Z,
         d.GPS_Latitude,
         d.GPS_Longitude
@@ -375,7 +387,7 @@ void setup() {
     logFile = SD.open(getNextFilename(), FILE_WRITE);
 
     if (logFile) {
-      logFile.println("time,dt,bmp_temp,bmp_press,bmp_alt,bmp_vel,ax,ay,az,gx,gy,gz,mx,my,mz,lat,lon,state");
+      logFile.println("time,dt,bmp_temp,bmp_press,bmp_alt,bmp_rel_alt,bmp_vel,ax,ay,az,gx,gy,gz,mx,my,mz,lat,lon,state");
       logFile.flush();
     }
   }
