@@ -12,7 +12,7 @@ bool BMP::begin() {
     }
 
     // Configure sensor (same tuning as earlier implementation)
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+    // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
     bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_1);
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);  // 50Hz update rate
