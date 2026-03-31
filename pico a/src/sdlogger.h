@@ -39,6 +39,7 @@ public:
     void logContinuity(bool mcont, bool bcont);
 
     void flush();
+    void stop();
 
 private:
     static const int BUFFER_SIZE = 2048;
@@ -53,6 +54,8 @@ private:
 
     volatile int activeIndex = 0;
     volatile int flushSize = 0;
+
+    bool isLogging = false;
 
     void append(const char* data);
 };
